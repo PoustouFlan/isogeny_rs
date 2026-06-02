@@ -104,24 +104,6 @@ mod test_product_isogeny {
         assert!(P2_check);
     }
 
-    fn j_invariant(A: &Fp2) -> Fp2 {
-        let one = Fp2::ONE;
-        let two = one + one;
-        let three = two + one;
-        let four = three + one;
-
-        let mut c256 = one;
-        for _ in 0..8 { c256 = c256 + c256; }
-
-        let A2 = A.square();
-        let mut num = A2 - three;
-        num = num.square() * num;
-        num *= c256;
-
-        let den = A2 - four;
-        num * den.invert()
-    }
-
     #[test]
     fn test_elliptic_product_isogeny_sqrt() {
         let A1 = Fp2::ZERO;
@@ -184,10 +166,10 @@ mod test_product_isogeny {
         let (E3_orig, E4_orig) = E3E4_orig.curves();
         let (E3_strict, E4_strict) = E3E4_strict.curves();
 
-        let j_E3_orig = j_invariant(&E3_orig.A);
-        let j_E4_orig = j_invariant(&E4_orig.A);
-        let j_E3_strict = j_invariant(&E3_strict.A);
-        let j_E4_strict = j_invariant(&E4_strict.A);
+        let j_E3_orig = &E3_orig.j_invariant();
+        let j_E4_orig = &E4_orig.j_invariant();
+        let j_E3_strict = &E3_strict.j_invariant();
+        let j_E4_strict = &E4_strict.j_invariant();
 
         let strict_matches_orig = (j_E3_orig.equals(&j_E3_strict) & j_E4_orig.equals(&j_E4_strict)) |
                                   (j_E3_orig.equals(&j_E4_strict) & j_E4_orig.equals(&j_E3_strict));
