@@ -103,4 +103,99 @@ mod test_product_isogeny {
         assert!(P1_check);
         assert!(P2_check);
     }
+
+    fn j_invariant(A: &Fp2) -> Fp2 {
+        let one = Fp2::ONE;
+        let two = one + one;
+        let three = two + one;
+        let four = three + one;
+
+        let mut c256 = one;
+        for _ in 0..8 { c256 = c256 + c256; }
+
+        let A2 = A.square();
+        let mut num = A2 - three;
+        num = num.square() * num;
+        num *= c256;
+
+        let den = A2 - four;
+        num * den.invert()
+    }
+
+    #[test]
+    fn test_elliptic_product_isogeny_sqrt() {
+        let A1 = Fp2::ZERO;
+        let (A2, _) = Fp2::decode(&hex::decode(A2_STR).unwrap());
+        let (P1_X, _) = Fp2::decode(&hex::decode(P1_X_STR).unwrap());
+        let (P1_Y, _) = Fp2::decode(&hex::decode(P1_Y_STR).unwrap());
+        let (P2_X, _) = Fp2::decode(&hex::decode(P2_X_STR).unwrap());
+        let (P2_Y, _) = Fp2::decode(&hex::decode(P2_Y_STR).unwrap());
+        let (Q1_X, _) = Fp2::decode(&hex::decode(Q1_X_STR).unwrap());
+        let (Q1_Y, _) = Fp2::decode(&hex::decode(Q1_Y_STR).unwrap());
+        let (Q2_X, _) = Fp2::decode(&hex::decode(Q2_X_STR).unwrap());
+        let (Q2_Y, _) = Fp2::decode(&hex::decode(Q2_Y_STR).unwrap());
+        let (PA_X, _) = Fp2::decode(&hex::decode(PA_X_STR).unwrap());
+        let (PA_Y, _) = Fp2::decode(&hex::decode(PA_Y_STR).unwrap());
+
+        let E1 = Curve::new(&A1);
+        let E2 = Curve::new(&A2);
+        let E1E2 = EllipticProduct::new(&E1, &E2);
+
+        let P1 = Point::new_xy(&P1_X, &P1_Y);
+        let P2 = Point::new_xy(&P2_X, &P2_Y);
+        let Q1 = Point::new_xy(&Q1_X, &Q1_Y);
+        let Q2 = Point::new_xy(&Q2_X, &Q2_Y);
+        let P1P2 = ProductPoint::new(&P1, &P2);
+        let Q1Q2 = ProductPoint::new(&Q1, &Q2);
+
+        let PA = Point::INFINITY;
+        let PB = Point::new_xy(&PA_X, &PA_Y);
+        let PAPB = ProductPoint::new(&PA, &PB);
+        let image_points = [PAPB];
+
+        let n = 126;
+
+        // Compute the original chain using elliptic_product_isogeny
+        let (E3E4_orig, _, ok_orig) = E1E2.elliptic_product_isogeny(
+            &P1P2,
+            &Q1Q2,
+            n,
+            &image_points,
+            false,
+        );
+
+        // Adjust the kernel by doubling twice to drop the 8-torsion padding
+        let P1P2_strict = E1E2.double_iter(&P1P2, 2);
+        let Q1Q2_strict = E1E2.double_iter(&Q1Q2, 2);
+
+        // Compute the chain without 8-torsion
+        let (E3E4_strict, _, ok_strict) = E1E2.elliptic_product_isogeny_sqrt(
+            &P1P2_strict,
+            &Q1Q2_strict,
+            n,
+            &image_points,
+            false,
+        );
+
+        assert_eq!(ok_orig, u32::MAX, "original elliptic_product_isogeny failed");
+        assert_eq!(ok_strict, u32::MAX, "elliptic_product_isogeny_sqrt failed");
+
+        // Compare J-Invariants of codomain against elliptic_product_isogeny
+        let (E3_orig, E4_orig) = E3E4_orig.curves();
+        let (E3_strict, E4_strict) = E3E4_strict.curves();
+
+        let j_E3_orig = j_invariant(&E3_orig.A);
+        let j_E4_orig = j_invariant(&E4_orig.A);
+        let j_E3_strict = j_invariant(&E3_strict.A);
+        let j_E4_strict = j_invariant(&E4_strict.A);
+
+        let strict_matches_orig = (j_E3_orig.equals(&j_E3_strict) & j_E4_orig.equals(&j_E4_strict)) |
+                                  (j_E3_orig.equals(&j_E4_strict) & j_E4_orig.equals(&j_E3_strict));
+
+        assert_eq!(
+            strict_matches_orig,
+            u32::MAX,
+            "codomain mismatch between elliptic_product_isogeny and elliptic_product_isogeny_sqrt"
+        );
+    }
 }

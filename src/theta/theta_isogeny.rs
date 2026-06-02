@@ -89,4 +89,138 @@ impl<Fq: FqTrait> ThetaStructure<Fq> {
 
         (codomain, ok)
     }
+
+    /// Given the 4-torsion above the kernel, compute the codomain of the
+    /// (2,2)-isogeny and the image of all points in `image_points`.
+    /// Cost:
+    ///   Codomain: 8S + 17M + 2Sqrt
+    pub fn two_isogeny_4_torsion(
+        &self,
+        T1_prime: &ThetaPoint<Fq>,
+        image_points: &mut [ThetaPoint<Fq>],
+        hadamard: [bool; 2],
+        verify_codomain: bool,
+    ) -> (Self, u32) {
+        let mut ok = u32::MAX;
+
+        // Extract squared coordinates
+        let (xAB, _, xCD, _) = T1_prime.cond_hadamard_square_hadamard(hadamard[0]);
+        let (A2, B2, C2, D2) = self.null_point().cond_hadamard_square_hadamard(hadamard[0]);
+
+        // Compute square roots required for the 4-torsion codomain structure
+        let (AB, r1) = (A2 * B2).sqrt();
+        let (AC, r2) = (A2 * C2).sqrt();
+
+        ok &= r1 & r2;
+
+        // Compute codomain coordinates
+        let mut B = AB * AC;
+        let mut D_inv = B * xCD;
+        B *= xAB;
+
+        let D = xCD * AB * A2;
+
+        let mut A = xAB * A2;
+        let C = A * C2;
+        A *= AC;
+
+        // Compute coordinate inverses for mapping image points
+        let mut A_inv = xAB * D2;
+        let mut C_inv = A_inv * B2;
+        A_inv *= C2;
+        let B_inv = A_inv * AB;
+        A_inv *= B2;
+        C_inv *= AC;
+        D_inv *= B2;
+
+        let mut codomain_A = A;
+        let mut codomain_B = B;
+        let mut codomain_C = C;
+        let mut codomain_D = D;
+
+        if hadamard[1] {
+            (codomain_A, codomain_B, codomain_C, codomain_D) = to_hadamard(&codomain_A, &codomain_B, &codomain_C, &codomain_D);
+        }
+
+        if verify_codomain {
+            ok &= !codomain_A.is_zero();
+        }
+
+        let codomain = Self::new_from_coords(&codomain_A, &codomain_B, &codomain_C, &codomain_D);
+
+        // Push image points through the isogeny
+        for P in image_points.iter_mut() {
+            let (mut XX, mut YY, mut ZZ, mut TT) = P.cond_hadamard_square_hadamard(hadamard[0]);
+            XX *= A_inv;
+            YY *= B_inv;
+            ZZ *= C_inv;
+            TT *= D_inv;
+            if hadamard[1] {
+                (XX, YY, ZZ, TT) = to_hadamard(&XX, &YY, &ZZ, &TT);
+            }
+            *P = ThetaPoint::new(&XX, &YY, &ZZ, &TT);
+        }
+
+        (codomain, ok)
+    }
+
+    /// Computes a (2,2)-isogeny from a level 2 theta structure using a
+    /// 2-torsion kernel point (the null point).
+    /// Cost:
+    ///   Codomain: 4S + 10M + 3Sqrt
+    pub fn two_isogeny_2_torsion(
+        &self,
+        image_points: &mut [ThetaPoint<Fq>],
+        hadamard: [bool; 2],
+        verify_codomain: bool,
+    ) -> (Self, u32) {
+        let mut ok = u32::MAX;
+
+        // Extract squared coordinates of the null point
+        let (A2, B2, C2, D2) = self.null_point().cond_hadamard_square_hadamard(hadamard[0]);
+
+        // Compute square roots required for the 2-torsion codomain structure
+        let (val_B, r1) = (A2 * B2).sqrt();
+        let (val_C, r2) = (A2 * C2).sqrt();
+        let (val_D, r3) = (A2 * D2).sqrt();
+
+        ok &= r1 & r2 & r3;
+
+        // Compute coordinate inverses for mapping image points
+        let mut A_inv = C2 * D2;
+        let B_inv = A_inv * val_B;
+        A_inv *= B2;
+        let C_inv = D2 * B2 * val_C;
+        let D_inv = C2 * B2 * val_D;
+
+        let mut codomain_A = A2;
+        let mut codomain_B = val_B;
+        let mut codomain_C = val_C;
+        let mut codomain_D = val_D;
+
+        if hadamard[1] {
+            (codomain_A, codomain_B, codomain_C, codomain_D) = to_hadamard(&codomain_A, &codomain_B, &codomain_C, &codomain_D);
+        }
+
+        if verify_codomain {
+            ok &= !codomain_A.is_zero();
+        }
+
+        let codomain = Self::new_from_coords(&codomain_A, &codomain_B, &codomain_C, &codomain_D);
+
+        // Push image points through the isogeny
+        for P in image_points.iter_mut() {
+            let (mut XX, mut YY, mut ZZ, mut TT) = P.cond_hadamard_square_hadamard(hadamard[0]);
+            XX *= A_inv;
+            YY *= B_inv;
+            ZZ *= C_inv;
+            TT *= D_inv;
+            if hadamard[1] {
+                (XX, YY, ZZ, TT) = to_hadamard(&XX, &YY, &ZZ, &TT);
+            }
+            *P = ThetaPoint::new(&XX, &YY, &ZZ, &TT);
+        }
+
+        (codomain, ok)
+    }
 }

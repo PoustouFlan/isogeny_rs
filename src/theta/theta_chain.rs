@@ -173,4 +173,140 @@ impl<Fq: FqTrait> EllipticProduct<Fq> {
 
         (product, couple_points, ok)
     }
+
+    /// Compute a 2^n isogeny (E1 x E2 -> E3 x E4) using a modified strategy
+    /// that incorporates square root evaluations for the final steps.
+    /// This computes a chain of (2,2)-isogenies where the final torsion
+    /// pushes through 4-torsion and 2-torsion steps directly.
+    /// Returns the codomain and evaluated `ProductPoint`s through the isogeny together
+    /// with a u32 which is `0xFF..FF` on success or `0x00..00` on failure.
+    pub fn elliptic_product_isogeny_sqrt(
+        &self,
+        P1P2: &ProductPoint<Fq>,
+        Q1Q2: &ProductPoint<Fq>,
+        len: usize,
+        image_points: &[ProductPoint<Fq>],
+        verify_chain: bool,
+    ) -> (EllipticProduct<Fq>, Vec<ProductPoint<Fq>>, u32) {
+        // We push the image points through at the same time as the strategy
+        // points, so we need to know how many images we're computing to keep
+        // track of them.
+        let n = image_points.len();
+
+        // Compute the amount of space we need for the strategy.
+        let space = len + 1;
+
+        // Store points of order 2^i for the strategy.
+        let mut product_pts: Vec<ProductPoint<Fq>> = vec![ProductPoint::INFINITY; 2 * space + n];
+        let mut theta_pts: Vec<ThetaPoint<Fq>> = vec![ThetaPoint::default(); 2 * space + n];
+
+        // The values i such that each point in strategy_points has order 2^i
+        let mut orders: Vec<usize> = vec![0; space];
+
+        // Set the first elements of the vector to the points we want to push
+        // through the isogeny.
+        product_pts[..n].copy_from_slice(image_points);
+
+        // Then add the kernel points afterwards.
+        product_pts[n] = *P1P2;
+        product_pts[n + 1] = *Q1Q2;
+
+        // Initialize the orders list. The 4-torsion and 2-torsion steps are handled
+        // separately, so we evaluate up to len - 2.
+        orders[0] = len - 2;
+
+        // Value to determine success / failure of isogeny chain
+        let mut ok = u32::MAX;
+        let mut check: u32;
+
+        // Step One: Perform doubling on the ProductPoints and compute the
+        // codomain from gluing. Keep intermediate doubles to push through.
+        let mut k = 0;
+        k = self.advance_strategy(&mut product_pts, &mut orders, k, n);
+
+        // Compute the Gluing isogeny and push through product_pts into
+        // the vector of ThetaPoints `theta_pts`.
+        let mut domain = self.gluing_isogeny(
+            &product_pts[n + 2 * k],
+            &product_pts[n + 2 * k + 1],
+            &product_pts[..(2 * k + n)],
+            &mut theta_pts,
+        );
+
+        // Reduce the order of the points we evaluated
+        for ord in orders.iter_mut().take(k) {
+            *ord -= 1;
+        }
+
+        let mut stack_ptr = (k as isize) - 1;
+        let mut steps_completed = 1;
+        let total_8_torsion_steps = len - 2;
+
+        // Step Two: Perform standard (2,2) isogenies for the 8-torsion points
+        while stack_ptr >= 0 && orders[stack_ptr as usize] > 0 {
+            let mut k = stack_ptr as usize;
+
+            // Perform doublings of the kernel elements, decreasing the values of orders
+            k = domain.advance_strategy(&mut theta_pts, &mut orders, k, n);
+
+            // Extract out the kernel for this step.
+            let T1 = theta_pts[2 * k + n];
+            let T2 = theta_pts[2 * k + n + 1];
+
+            // For the inner steps we use the standard hadamard configuration
+            let hadamard = [false, true];
+
+            // Determine if we are at the last 8-torsion step to size the evaluation points
+            let is_last_8_torsion = steps_completed + 1 == total_8_torsion_steps;
+            let eval_len = if is_last_8_torsion { n + 2 } else { 2 * k + n };
+
+            // Perform one step of the (2,2) isogeny and push through
+            (domain, check) = ThetaStructure::two_isogeny(
+                &T1,
+                &T2,
+                &mut theta_pts[..eval_len],
+                hadamard,
+                verify_chain,
+            );
+            ok &= check;
+
+            // Reduce the order of the points we evaluated
+            for ord in orders.iter_mut().take(k) {
+                *ord -= 1;
+            }
+
+            stack_ptr = (k as isize) - 1;
+            steps_completed += 1;
+        }
+
+        // Step Three: Evaluate the remaining 4-torsion and 2-torsion steps
+        let T1_prime = theta_pts[n];
+        (domain, check) = domain.two_isogeny_4_torsion(
+            &T1_prime,
+            &mut theta_pts[..n],
+            [false, false],
+            verify_chain,
+        );
+        ok &= check;
+
+        (domain, check) = domain.two_isogeny_2_torsion(
+            &mut theta_pts[..n],
+            [true, false],
+            verify_chain,
+        );
+        ok &= check;
+
+        // Use a symplectic transform to first get the domain into a compatible form
+        // for splitting
+        (domain, check) = domain.splitting_isomorphism(&mut theta_pts);
+        ok &= check;
+
+        // Split from the level 2 theta model to the elliptic product E3 x E4 and map points
+        // onto this product
+        let eval_points = &theta_pts[..n];
+        let mut couple_points = vec![ProductPoint::INFINITY; n];
+        let product = EllipticProduct::split_to_product(&domain, eval_points, &mut couple_points);
+
+        (product, couple_points, ok)
+    }
 }
