@@ -181,3 +181,207 @@ mod test_product_isogeny {
         );
     }
 }
+
+#[cfg(test)]
+mod test_product_isogeny_castryck_decru {
+    use isogeny::{
+        elliptic::{curve::Curve, projective_point::Point},
+        theta::elliptic_product::{EllipticProduct, ProductPoint},
+    };
+
+    // The Castryck-Decru instance uses a specific modulus
+    static MODULUS: [u64; 4] = [
+        0xffffffffffffffff,
+        0xdcdfffffffffffff,
+        0xa0e11417aba2a421,
+        0x00004937aae3413f,
+    ];
+    fp2::define_fp2_from_modulus!(typename = Fp2, base_typename = Fp, modulus = MODULUS,);
+
+    const A: u64 = 90503613537036670;
+    const B: u64 = 300628336613559557;
+
+    fn iota(p: &Point<Fp2>) -> Point<Fp2> {
+        let mut res = *p;
+        res.X = -res.X;
+        res.Y *= Fp2::ZETA;
+        res
+    }
+
+    fn psi_action(curve: &Curve<Fp2>, p: &Point<Fp2>) -> Point<Fp2> {
+        let a_bytes = A.to_le_bytes();
+        let b_bytes = B.to_le_bytes();
+        let a_p = curve.mul(p, &a_bytes, 64);
+        let b_p = curve.mul(p, &b_bytes, 64);
+        let iota_b_p = iota(&b_p);
+        curve.add(&a_p, &iota_b_p)
+    }
+
+    fn decode_fp2(x0_hex: &str, x1_hex: &str) -> Fp2 {
+        let (x0, _) = Fp::decode(&hex::decode(x0_hex).unwrap());
+        let (x1, _) = Fp::decode(&hex::decode(x1_hex).unwrap());
+        Fp2::new(&x0, &x1)
+    }
+
+    fn decode_fp2_flat(h: &str) -> Fp2 {
+        let bytes = hex::decode(h).unwrap();
+        let (x0, _) = Fp::decode(&bytes[..30]);
+        let (x1, _) = Fp::decode(&bytes[30..]);
+        Fp2::new(&x0, &x1)
+    }
+
+    #[test]
+    fn test_elliptic_product_isogeny_sqrt_point_eval() {
+        let E0 = Curve::<Fp2> {
+            A: Fp2::ZERO,
+            A24: Fp2::new(&Fp::new([0, 0, 0, 9223372036854775808]), &Fp::ZERO),
+        };
+
+        let EB = Curve::<Fp2> {
+            A: decode_fp2(
+                "5a32b8fee4cb360d1934edd47b54a665e2ff853724d2c6e0467eb01dae0f",
+                "633d6ec480a858b3ffb3c09d369fa82f5b79a343bbf7ab0d8a726a841e46"
+            ),
+            A24: decode_fp2(
+                "970cae3ff9b24d43064d3bf51e956999f87fe10d89b431b8911f6c87eb03",
+                "588f1b31202ad6ecff2c70a7cd27923170d9a29100cd133c920d45617148"
+            ),
+        };
+
+        let P2 = Point::<Fp2> {
+            X: decode_fp2(
+                "5e5c6e8e8aafe8a017472bf00902dd634a405014ea027ad57bc011182106",
+                "7566814d948e0f527f8229300052560cc06d3dae298d32096c921e790806"
+            ),
+            Y: decode_fp2(
+                "0d81d61a4a834a5c9edba4de8cf64a2975efd16db778cdffce2aaa375a27",
+                "5d463d3eab5e0f81bde9aace44c5224ea5ab5da6a46284ebd2348f5e7c0f"
+            ),
+            Z: Fp2::ONE,
+        };
+
+        let Q2 = Point::<Fp2> {
+            X: decode_fp2(
+                "bf32e2f5f90e97a5f98b418836961d92ffd4223fe630af5d1230c0270a32",
+                "5d2aa79a442cce1ec1fc913f00112a1395a9f4dd8afefb0decae0446f91d"
+            ),
+            Y: decode_fp2(
+                "3eab3190e868a399ffcfc51303fdf0ef162b077f114e39df05505511c70b",
+                "c9404ff59d64dfbc0ea045d05a04b9bede3abd81de29764ccad0f7434420"
+            ),
+            Z: Fp2::ONE,
+        };
+
+        let PB = Point::<Fp2> {
+            X: decode_fp2(
+                "ca88750e54a3167c2a778cb2d02dbcb9b3ce617e306d61c6da2385e50517",
+                "b23bd2393cf7746e443fe8f727bed37e1fd26d51738129fa0943ad160f2d"
+            ),
+            Y: decode_fp2(
+                "4e6204f764d176f69c5be3c073b43c0495c86d5c1dd9cb909acc671d3a23",
+                "5b24e713f71ece6a3f5778cb7eb3d31fba4dbfae06d914e65339a4cb4928"
+            ),
+            Z: Fp2::ONE,
+        };
+
+        let QB = Point::<Fp2> {
+            X: decode_fp2(
+                "637264529c09212772bcc03e55b5cf512f80e00c4b24d998432db4ac4848",
+                "42857cec556b0777f4a6daa2554e01be6900d5b6d7d7b95775238466263e"
+            ),
+            Y: decode_fp2(
+                "d53b250cc535a206f737dba16a29bb1417b166e2589a8dfdd84ffb891f45",
+                "d036af8478a99652a230ba4700d9cb8a8047a3b693d5fa0d18d2c50fc010"
+            ),
+            Z: Fp2::ONE,
+        };
+
+        let P3 = Point::<Fp2> {
+            X: decode_fp2(
+                "db53810117e7bfe64139ae22521d9e1b6f3b8e2f1c39f467c5d43803f207",
+                "6f6fc5872440e6c89a43859944e7e050f8909ccb69c8dee98cd537611429"
+            ),
+            Y: decode_fp2(
+                "6bc75a9ec1727c309ef14e23ca5e64296fa022f18f5d119d53025c068d2c",
+                "07be41c87e42cefe2945987b55707bd0f5577b85ab021a69981c3767e031"
+            ),
+            Z: Fp2::ONE,
+        };
+
+        let Q3 = Point::<Fp2> {
+            X: decode_fp2(
+                "4faf804cebf8e45516ac63fefcf5f274dfd9544699d2c654e1e50e70f30f",
+                "242c02924b6dffef81075bd5374154c3a1a63634a1e6fbbf745d44f3ab18"
+            ),
+            Y: decode_fp2(
+                "88cad573d1bd074e1b2309757959c5812f265faa73a6e36f6704b078df23",
+                "48e6d9bafa0da2fe3b726e71853655db0e2b4c588e889dc91726bd396d2c"
+            ),
+            Z: Fp2::ONE,
+        };
+
+        let psi_p2 = psi_action(&E0, &P2);
+        let psi_q2 = psi_action(&E0, &Q2);
+
+        let eb_e0 = EllipticProduct::new(&EB, &E0);
+
+        let k1 = ProductPoint::new(&PB, &psi_p2);
+        let k2 = ProductPoint::new(&QB, &psi_q2);
+
+        let psi_p3 = psi_action(&E0, &P3);
+        let psi_q3 = psi_action(&E0, &Q3);
+
+        let eval_pts = [
+            ProductPoint::new(&Point::INFINITY, &psi_p3),
+            ProductPoint::new(&Point::INFINITY, &psi_q3),
+        ];
+
+        // Evaluate chain with sqrt strategy
+        let (e_out, images, ok) = eb_e0.elliptic_product_isogeny_sqrt(&k1, &k2, 117, &eval_pts, false);
+        assert_eq!(ok, u32::MAX, "Isogeny chain evaluation failed");
+
+        let (e3, e4) = e_out.curves();
+
+        let j3 = e3.j_invariant();
+        let j_e0 = E0.j_invariant();
+
+        // Identify which curve corresponds to EB_prime in the product structure
+        let (eb_prime, p_idx) = if j3.equals(&j_e0) == u32::MAX {
+            (e4, 1)
+        } else {
+            (e3, 0)
+        };
+
+        let (p3_e3, p3_e4) = images[0].points();
+        let phi_b_p3 = if p_idx == 1 { p3_e4 } else { p3_e3 };
+
+        let (q3_e3, q3_e4) = images[1].points();
+        let phi_b_q3 = if p_idx == 1 { q3_e4 } else { q3_e3 };
+
+        let inv_z_p = phi_b_p3.Z.invert();
+        let p_x = phi_b_p3.X * inv_z_p;
+        let p_y = phi_b_p3.Y * inv_z_p;
+
+        let inv_z_q = phi_b_q3.Z.invert();
+        let q_x = phi_b_q3.X * inv_z_q;
+        let q_y = phi_b_q3.Y * inv_z_q;
+
+        let expected_a_str = "550f146c857d327df9749ef9092ef9310d4d793c4de236e88a6f432c7642bbd0f92b5f64349cd0a9816064c4cdc2dc32f12514ca01e77f982cafb615";
+        let expected_p3_x_str = "f388c4a644b9a217edf4a233d4dbd58b5f017bcccfb72d3c233ee6993911bf01563542b27e2d982e91c347be7f47e8d58f717f33a7b6f45386257848";
+        let expected_p3_y_str = "d3545defd7a6fdd6a3396f8fafd7dddcf0aabe6c96711fb4f3b8deeab8393858e2614104bfdb780c97bc0a57de92058bb54f530f4a655eef9cf59713";
+        let expected_q3_x_str = "0bb4ebc4850f7215b871ef885f1f895500504803405ee3b4059bc7142a31c5ccbb70e3de616360a950ae6aa9ccc70da8bd6926a8bd14bc186c931311";
+        let expected_q3_y_str = "fbae76347b91cd8f45921560c3b9339ae5d88935b0ee335c86411dfd4f23f59d6541dc2423a51241eff2fabe8f53ddbca3a9945e9b458c3f6ee89840";
+
+        let exp_a = decode_fp2_flat(expected_a_str);
+        let exp_p3_x = decode_fp2_flat(expected_p3_x_str);
+        let exp_p3_y = decode_fp2_flat(expected_p3_y_str);
+        let exp_q3_x = decode_fp2_flat(expected_q3_x_str);
+        let exp_q3_y = decode_fp2_flat(expected_q3_y_str);
+
+        assert_eq!(eb_prime.A.equals(&exp_a), u32::MAX, "Codomain A parameter mismatch");
+        assert_eq!(p_x.equals(&exp_p3_x), u32::MAX, "Evaluated P3 X-coordinate mismatch");
+        assert_eq!(p_y.equals(&exp_p3_y), u32::MAX, "Evaluated P3 Y-coordinate mismatch");
+        assert_eq!(q_x.equals(&exp_q3_x), u32::MAX, "Evaluated Q3 X-coordinate mismatch");
+        assert_eq!(q_y.equals(&exp_q3_y), u32::MAX, "Evaluated Q3 Y-coordinate mismatch");
+    }
+}
