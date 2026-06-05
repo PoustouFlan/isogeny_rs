@@ -41,7 +41,7 @@ mod test_product_isogeny {
     static PB_Y_IM_STR: &str = "12a4e94423744ae02c830a5188e345b9eac47823cfd7a70062995a0517137a028863d606013f8d4c42018cd7b540ad5b8a7135bbbfa3caf94019832346732010";
 
     #[test]
-    fn test_elliptic_product_isogeny() {
+    fn test_elliptic_product_isogeny_with_torsion() {
         let A1 = Fp2::ZERO;
         let (A2, _) = Fp2::decode(&hex::decode(A2_STR).unwrap());
 
@@ -90,7 +90,7 @@ mod test_product_isogeny {
 
         // Compute chain
         let (E3E4, images, ok) =
-            E1E2.elliptic_product_isogeny(&P1P2, &Q1Q2, n, &image_points, true);
+            E1E2.elliptic_product_isogeny_with_torsion(&P1P2, &Q1Q2, n, &image_points, true);
         assert!(ok == u32::MAX);
 
         let (_, E4) = E3E4.curves();
@@ -105,7 +105,7 @@ mod test_product_isogeny {
     }
 
     #[test]
-    fn test_elliptic_product_isogeny_sqrt() {
+    fn test_elliptic_product_isogeny() {
         let A1 = Fp2::ZERO;
         let (A2, _) = Fp2::decode(&hex::decode(A2_STR).unwrap());
         let (P1_X, _) = Fp2::decode(&hex::decode(P1_X_STR).unwrap());
@@ -137,8 +137,8 @@ mod test_product_isogeny {
 
         let n = 126;
 
-        // Compute the original chain using elliptic_product_isogeny
-        let (E3E4_orig, _, ok_orig) = E1E2.elliptic_product_isogeny(
+        // Compute the original chain using elliptic_product_isogeny_with_torsion
+        let (E3E4_orig, _, ok_orig) = E1E2.elliptic_product_isogeny_with_torsion(
             &P1P2,
             &Q1Q2,
             n,
@@ -151,7 +151,7 @@ mod test_product_isogeny {
         let Q1Q2_strict = E1E2.double_iter(&Q1Q2, 2);
 
         // Compute the chain without 8-torsion
-        let (E3E4_strict, _, ok_strict) = E1E2.elliptic_product_isogeny_sqrt(
+        let (E3E4_strict, _, ok_strict) = E1E2.elliptic_product_isogeny(
             &P1P2_strict,
             &Q1Q2_strict,
             n,
@@ -159,10 +159,10 @@ mod test_product_isogeny {
             false,
         );
 
-        assert_eq!(ok_orig, u32::MAX, "original elliptic_product_isogeny failed");
-        assert_eq!(ok_strict, u32::MAX, "elliptic_product_isogeny_sqrt failed");
+        assert_eq!(ok_orig, u32::MAX, "original elliptic_product_isogeny_with_torsion failed");
+        assert_eq!(ok_strict, u32::MAX, "elliptic_product_isogeny failed");
 
-        // Compare J-Invariants of codomain against elliptic_product_isogeny
+        // Compare J-Invariants of codomain against elliptic_product_isogeny_with_torsion
         let (E3_orig, E4_orig) = E3E4_orig.curves();
         let (E3_strict, E4_strict) = E3E4_strict.curves();
 
@@ -177,7 +177,7 @@ mod test_product_isogeny {
         assert_eq!(
             strict_matches_orig,
             u32::MAX,
-            "codomain mismatch between elliptic_product_isogeny and elliptic_product_isogeny_sqrt"
+            "codomain mismatch between elliptic_product_isogeny_with_torsion and elliptic_product_isogeny"
         );
     }
 }
@@ -231,7 +231,7 @@ mod test_product_isogeny_castryck_decru {
     }
 
     #[test]
-    fn test_elliptic_product_isogeny_sqrt_point_eval() {
+    fn test_elliptic_product_isogeny_point_eval() {
         let E0 = Curve::<Fp2> {
             A: Fp2::ZERO,
             A24: Fp2::new(&Fp::new([0, 0, 0, 9223372036854775808]), &Fp::ZERO),
@@ -337,7 +337,7 @@ mod test_product_isogeny_castryck_decru {
         ];
 
         // Evaluate chain with sqrt strategy
-        let (e_out, images, ok) = eb_e0.elliptic_product_isogeny_sqrt(&k1, &k2, 117, &eval_pts, false);
+        let (e_out, images, ok) = eb_e0.elliptic_product_isogeny(&k1, &k2, 117, &eval_pts, false);
         assert_eq!(ok, u32::MAX, "Isogeny chain evaluation failed");
 
         let (e3, e4) = e_out.curves();

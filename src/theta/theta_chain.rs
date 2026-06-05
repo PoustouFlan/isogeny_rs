@@ -181,7 +181,7 @@ impl<Fq: FqTrait> EllipticProduct<Fq> {
     /// the codomain for the last two steps without requiring square roots.
     /// Returns the codomain and evaluated `ProductPoint` through the isogeny together
     /// with a u32 which is `0xFF..FF` on success or `0x00..00` on failure.
-    pub fn elliptic_product_isogeny(
+    pub fn elliptic_product_isogeny_with_torsion(
         &self,
         P1P2: &ProductPoint<Fq>,
         Q1Q2: &ProductPoint<Fq>,
@@ -242,7 +242,7 @@ impl<Fq: FqTrait> EllipticProduct<Fq> {
     /// This incorporates square root evaluations for the final steps.
     /// Returns the codomain and evaluated `ProductPoint`s through the isogeny together
     /// with a u32 which is `0xFF..FF` on success or `0x00..00` on failure.
-    pub fn elliptic_product_isogeny_sqrt(
+    pub fn elliptic_product_isogeny(
         &self,
         P1P2: &ProductPoint<Fq>,
         Q1Q2: &ProductPoint<Fq>,
