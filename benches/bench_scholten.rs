@@ -111,7 +111,7 @@ mod benchmark_scholten {
         let n = 125;
 
         // Compute chain
-        let (F3F4, _, ok) = E1E2.elliptic_product_isogeny(&P1P2, &Q1Q2, n, &[], true);
+        let (F3F4, _, ok) = E1E2.elliptic_product_isogeny_with_torsion(&P1P2, &Q1Q2, n, &[], true);
         assert!(ok == u32::MAX);
 
         let (F3, F4) = F3F4.curves();
@@ -121,7 +121,7 @@ mod benchmark_scholten {
         let bench_id = format!("Benchmarking (2^{n}, 2^{n}) isogeny over Fp2.",);
         c.bench_function(&bench_id, |b| {
             b.iter(|| {
-                black_box(E1E2).elliptic_product_isogeny(
+                black_box(E1E2).elliptic_product_isogeny_with_torsion(
                     &black_box(P1P2),
                     &black_box(Q1Q2),
                     black_box(n),
