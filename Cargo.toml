@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+crypto-bigint = "0.7.3"
 fp2 = "0.3.0"
 num-bigint = "0.4.3"
 num-integer = "0.1"
