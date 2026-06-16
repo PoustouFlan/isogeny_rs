@@ -303,6 +303,8 @@ dependencies = [
  "fp2",
  "hex",
  "num-bigint",
+ "num-integer",
+ "num-traits",
  "rand",
  "rand_core",
  "rayon",

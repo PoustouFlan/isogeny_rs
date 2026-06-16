@@ -14,3 +14,4 @@ pub mod protocols;
 pub mod rings;
 pub mod theta;
 pub mod utilities;
+pub mod quaternion;
