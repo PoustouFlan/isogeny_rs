@@ -78,6 +78,12 @@ impl<const LIMBS: usize> BigIntAlg for CryptoInt<LIMBS> {
         CryptoInt(Int::new(g_uint.into()))
     }
 
+    fn xgcd(&self, other: &Self) -> (Self, Self, Self) {
+        let out = self.0.xgcd(&other.0);
+        // Todo: investigate a little more about if Uint->Int is still zero cost
+        (CryptoInt(Int::new(out.gcd.into())), CryptoInt(out.x), CryptoInt(out.y))
+    }
+
     fn abs(&self) -> Self {
         let uint_abs = self.0.abs();
         // Convert Uint back to Int by passing the limbs array

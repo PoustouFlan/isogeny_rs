@@ -21,6 +21,7 @@ pub trait BigIntAlg:
     fn from_i32(val: i32) -> Self;
 
     fn gcd(&self, other: &Self) -> Self;
+    fn xgcd(&self, other: &Self) -> (Self, Self, Self);
 
     fn abs(&self) -> Self;
     fn is_zero(&self) -> bool;

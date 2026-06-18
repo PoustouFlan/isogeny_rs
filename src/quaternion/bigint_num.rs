@@ -21,6 +21,11 @@ impl BigIntAlg for BigInt {
         self.extended_gcd(other).gcd
     }
 
+    fn xgcd(&self, other: &Self) -> (Self, Self, Self) {
+        let res = self.extended_gcd(other);
+        (res.gcd, res.x, res.y)
+    }
+
     fn abs(&self) -> Self {
         <BigInt as Signed>::abs(self)
     }
