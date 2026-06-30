@@ -28,6 +28,29 @@ pub trait BigIntAlg:
     fn xgcd(&self, other: &Self) -> (Self, Self, Self);
     fn abs(&self) -> Self;
     fn is_zero(&self) -> bool;
+
+    // Additions (mainly for HNF)
+
+    /// Strictly positive modulo in [0, m)
+    fn positive_mod(&self, m: &Self) -> Self {
+        let mut r = self.clone() % m.clone();
+        if r < Self::zero() {
+            r = r + m.clone();
+        }
+        r
+    }
+
+    /// Centered modulo in (-m/2, m/2]
+    fn centered_mod(&self, m: &Self) -> Self {
+        let r = self.positive_mod(m);
+        let two = Self::from_i32(2);
+        let d = m.clone() / two;
+        if r > d {
+            r - m.clone()
+        } else {
+            r
+        }
+    }
 }
 
 // ========================================================================
@@ -43,10 +66,32 @@ pub trait QuatConfig<T: BigIntAlg> {
 // Integer Quaternions (Numerator Only)
 // ========================================================================
 
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IntQuat<T: BigIntAlg, P: QuatConfig<T>> {
     pub coords: [T; 4],
     _marker: PhantomData<P>,
+}
+
+impl<T: BigIntAlg, P: QuatConfig<T>> Clone for IntQuat<T, P> {
+    fn clone(&self) -> Self {
+        Self {
+            coords: self.coords.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T: BigIntAlg, P: QuatConfig<T>> PartialEq for IntQuat<T, P> {
+    fn eq(&self, other: &Self) -> bool {
+        self.coords == other.coords
+    }
+}
+
+impl<T: BigIntAlg, P: QuatConfig<T>> Eq for IntQuat<T, P> {}
+
+impl<T: BigIntAlg, P: QuatConfig<T>> Debug for IntQuat<T, P> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("IntQuat").field("coords", &self.coords).finish()
+    }
 }
 
 impl<T: BigIntAlg, P: QuatConfig<T>> IntQuat<T, P> {
@@ -85,24 +130,30 @@ impl<T: BigIntAlg, P: QuatConfig<T>> IntQuat<T, P> {
         }
     }
 
-    pub fn scalar_mul(&self, scalar: &T) -> Self {
-        Self {
-            coords: [
-                self.coords[0].clone() * scalar.clone(),
-                self.coords[1].clone() * scalar.clone(),
-                self.coords[2].clone() * scalar.clone(),
-                self.coords[3].clone() * scalar.clone(),
-            ],
-            _marker: PhantomData,
-        }
-    }
-
     pub fn norm(&self) -> T {
         let conj_x = self.conj();
         // Multiplication implicitly uses P::p() via the overloaded operator
         // TODO: faster, direct computation
         let norm_elem = self * &conj_x;
         norm_elem.coords[0].clone().abs()
+    }
+
+
+    // HNF additions
+    /// Computes the GCD of the 4 coordinates of this quaternion
+    pub fn coords_gcd(&self) -> T {
+        let mut g = self.coords[0].clone();
+        for i in 1..4 {
+            g = g.gcd(&self.coords[i]);
+        }
+        g
+    }
+
+    /// Modifies the quaternion in place by applying centered_mod to each coordinate
+    pub fn centered_mod_mut(&mut self, m: &T) {
+        for i in 0..4 {
+            self.coords[i] = self.coords[i].centered_mod(m);
+        }
     }
 }
 
@@ -138,6 +189,24 @@ impl<'a, 'b, T: BigIntAlg, P: QuatConfig<T>> Sub<&'b IntQuat<T, P>> for &'a IntQ
     }
 }
 
+// Scalar Multiplication: &IntQuat * &T
+impl<'a, 'b, T: BigIntAlg, P: QuatConfig<T>> Mul<&'b T> for &'a IntQuat<T, P> {
+    type Output = IntQuat<T, P>;
+
+    fn mul(self, scalar: &'b T) -> Self::Output {
+        IntQuat {
+            coords: [
+                self.coords[0].clone() * scalar.clone(),
+                self.coords[1].clone() * scalar.clone(),
+                self.coords[2].clone() * scalar.clone(),
+                self.coords[3].clone() * scalar.clone(),
+            ],
+            _marker: PhantomData,
+        }
+    }
+}
+
+// Quaternion Multiplication: &IntQuat * &IntQuat
 impl<'a, 'b, T: BigIntAlg, P: QuatConfig<T>> Mul<&'b IntQuat<T, P>> for &'a IntQuat<T, P> {
     type Output = IntQuat<T, P>;
     fn mul(self, rhs: &'b IntQuat<T, P>) -> Self::Output {
@@ -178,6 +247,62 @@ impl<'a, T: BigIntAlg, P: QuatConfig<T>> Neg for &'a IntQuat<T, P> {
         }
     }
 }
+
+// Scalar Division: &IntQuat / &T (Assumes exact division)
+impl<'a, 'b, T: BigIntAlg, P: QuatConfig<T>> Div<&'b T> for &'a IntQuat<T, P> {
+    type Output = IntQuat<T, P>;
+
+    fn div(self, scalar: &'b T) -> Self::Output {
+        IntQuat {
+            coords: [
+                self.coords[0].clone() / scalar.clone(),
+                self.coords[1].clone() / scalar.clone(),
+                self.coords[2].clone() / scalar.clone(),
+                self.coords[3].clone() / scalar.clone(),
+            ],
+            _marker: PhantomData,
+        }
+    }
+}
+
+// --- Macros to auto-implement Val/Ref combinations for +, -, * ---
+macro_rules! impl_binop {
+    ($trait:ident, $method:ident) => {
+        impl<T: BigIntAlg, P: QuatConfig<T>> $trait<IntQuat<T, P>> for IntQuat<T, P> {
+            type Output = IntQuat<T, P>;
+            fn $method(self, rhs: IntQuat<T, P>) -> Self::Output { (&self).$method(&rhs) }
+        }
+        impl<'a, T: BigIntAlg, P: QuatConfig<T>> $trait<&'a IntQuat<T, P>> for IntQuat<T, P> {
+            type Output = IntQuat<T, P>;
+            fn $method(self, rhs: &'a IntQuat<T, P>) -> Self::Output { (&self).$method(rhs) }
+        }
+        impl<'a, T: BigIntAlg, P: QuatConfig<T>> $trait<IntQuat<T, P>> for &'a IntQuat<T, P> {
+            type Output = IntQuat<T, P>;
+            fn $method(self, rhs: IntQuat<T, P>) -> Self::Output { self.$method(&rhs) }
+        }
+    };
+}
+impl_binop!(Add, add);
+impl_binop!(Sub, sub);
+impl_binop!(Mul, mul);
+
+macro_rules! impl_scalar_mul {
+    () => {
+        impl<T: BigIntAlg, P: QuatConfig<T>> Mul<T> for IntQuat<T, P> {
+            type Output = IntQuat<T, P>;
+            fn mul(self, rhs: T) -> Self::Output { (&self).mul(&rhs) }
+        }
+        impl<'a, T: BigIntAlg, P: QuatConfig<T>> Mul<&'a T> for IntQuat<T, P> {
+            type Output = IntQuat<T, P>;
+            fn mul(self, rhs: &'a T) -> Self::Output { (&self).mul(rhs) }
+        }
+        impl<'a, T: BigIntAlg, P: QuatConfig<T>> Mul<T> for &'a IntQuat<T, P> {
+            type Output = IntQuat<T, P>;
+            fn mul(self, rhs: T) -> Self::Output { self.mul(&rhs) }
+        }
+    }
+}
+impl_scalar_mul!();
 
 // ========================================================================
 // Rational Quaternions (Integer + Denominator)
@@ -255,8 +380,8 @@ impl<T: BigIntAlg, P: QuatConfig<T>> RatQuat<T, P> {
         let a_mult = other.denom.clone() / gcd.clone();
         let b_mult = self.denom.clone() / gcd;
 
-        let a_scaled = self.num.scalar_mul(&a_mult);
-        let b_scaled = other.num.scalar_mul(&b_mult);
+        let a_scaled = &self.num * &a_mult;
+        let b_scaled = &other.num * &b_mult;
 
         Self {
             num: &a_scaled + &b_scaled,
@@ -269,8 +394,8 @@ impl<T: BigIntAlg, P: QuatConfig<T>> RatQuat<T, P> {
         let a_mult = other.denom.clone() / gcd.clone();
         let b_mult = self.denom.clone() / gcd;
 
-        let a_scaled = self.num.scalar_mul(&a_mult);
-        let b_scaled = other.num.scalar_mul(&b_mult);
+        let a_scaled = &self.num * &a_mult;
+        let b_scaled = &other.num * &b_mult;
 
         Self {
             num: &a_scaled - &b_scaled,
