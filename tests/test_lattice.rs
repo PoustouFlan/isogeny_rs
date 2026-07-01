@@ -1,109 +1,149 @@
-use isogeny::quaternion::algebra::{BigIntAlg, QuatAlg, QuatElem};
+use isogeny::quaternion::algebra::{BigIntAlg, QuatConfig, IntQuat, RatQuat};
 use isogeny::quaternion::lattice::QuatLattice;
-use isogeny::quaternion::matrix::MatrixUtils;
 use num_bigint::BigInt;
+use std::sync::LazyLock;
 
+// ========================================================================
+// Test Configurations
+// ========================================================================
+
+pub struct P19;
+static P19_VAL: LazyLock<BigInt> = LazyLock::new(|| BigInt::from(19));
+impl QuatConfig<BigInt> for P19 { fn p() -> &'static BigInt { &P19_VAL } }
+
+pub struct P23;
+static P23_VAL: LazyLock<BigInt> = LazyLock::new(|| BigInt::from(23));
+impl QuatConfig<BigInt> for P23 { fn p() -> &'static BigInt { &P23_VAL } }
+
+#[derive(Debug)]
+pub struct P103;
+static P103_VAL: LazyLock<BigInt> = LazyLock::new(|| BigInt::from(103));
+impl QuatConfig<BigInt> for P103 { fn p() -> &'static BigInt { &P103_VAL } }
+
+type TestLattice = QuatLattice<BigInt, P103>;
+type TestQuat = IntQuat<BigInt, P103>;
+type TestRatQuat = RatQuat<BigInt, P103>;
+
+type TestLattice19 = QuatLattice<BigInt, P19>;
+type TestQuat19 = IntQuat<BigInt, P19>;
+
+type TestLattice23 = QuatLattice<BigInt, P23>;
+type TestQuat23 = IntQuat<BigInt, P23>;
+type TestRatQuat23 = RatQuat<BigInt, P23>;
 
 #[inline]
 fn b_zero() -> BigInt { <BigInt as BigIntAlg>::zero() }
 #[inline]
 fn b(val: i32) -> BigInt { <BigInt as BigIntAlg>::from_i32(val) }
 
+fn identity_gens<P: QuatConfig<BigInt>>() -> [IntQuat<BigInt, P>; 4] {
+    [
+        IntQuat::new_i32(1, 0, 0, 0),
+        IntQuat::new_i32(0, 1, 0, 0),
+        IntQuat::new_i32(0, 0, 1, 0),
+        IntQuat::new_i32(0, 0, 0, 1),
+    ]
+}
+
+// ========================================================================
+// Tests
+// ========================================================================
+
 #[test]
 fn test_lattice_equal() {
-    let mut lat = QuatLattice::<BigInt>::zero();
-    let mut cmp = QuatLattice::<BigInt>::zero();
+    let mut lat = TestLattice::zero();
+    let mut cmp = TestLattice::zero();
 
-    lat.basis = MatrixUtils::identity();
-    cmp.basis = MatrixUtils::identity();
-    assert!(QuatLattice::equal(&lat, &cmp));
+    lat.generators = identity_gens();
+    cmp.generators = identity_gens();
+    assert!(TestLattice::equal(&lat, &cmp));
 
     lat.denom = b(5);
     cmp.denom = b(4);
-    assert!(!QuatLattice::equal(&lat, &cmp));
+    assert!(!TestLattice::equal(&lat, &cmp));
 
     lat.denom = b(1);
     cmp.denom = b(-1);
-    assert!(QuatLattice::equal(&lat, &cmp));
+    assert!(TestLattice::equal(&lat, &cmp));
 
     lat.denom = b(3);
     cmp.denom = b(3);
-    assert!(QuatLattice::equal(&lat, &cmp));
+    assert!(TestLattice::equal(&lat, &cmp));
 
-    lat.basis[0][0] = b(1);
-    lat.basis[0][3] = b(-1);
-    lat.basis[1][1] = b(-2);
-    lat.basis[2][2] = b(1);
-    lat.basis[2][1] = b(1);
-    lat.basis[3][3] = b(-3);
+    // Transposed from original matrix
+    lat.generators = [
+        TestQuat::new_i32(1, 0, 0, 0),
+        TestQuat::new_i32(0, -2, 1, 0),
+        TestQuat::new_i32(0, 0, 1, 0),
+        TestQuat::new_i32(-1, 0, 0, -3),
+    ];
     lat.denom = b(6);
     lat.hnf();
 
-    cmp.basis = lat.basis.clone();
+    cmp.generators = lat.generators.clone();
     cmp.denom = b(6);
-    assert!(QuatLattice::equal(&lat, &cmp));
+    assert!(TestLattice::equal(&lat, &cmp));
 
     cmp.denom = b(-7);
-    assert!(!QuatLattice::equal(&lat, &cmp));
+    assert!(!TestLattice::equal(&lat, &cmp));
 
     cmp.denom = b(6);
-    cmp.basis[3][3] = b(165);
-    assert!(!QuatLattice::equal(&lat, &cmp));
+    cmp.generators[3].coords[3] = b(165);
+    assert!(!TestLattice::equal(&lat, &cmp));
 }
 
 #[test]
 fn test_lattice_inclusion() {
-    let mut lat = QuatLattice::<BigInt>::zero();
-    let mut cmp = QuatLattice::<BigInt>::zero();
+    let mut lat = TestLattice::zero();
+    let mut cmp = TestLattice::zero();
 
-    lat.basis = MatrixUtils::identity();
-    cmp.basis = MatrixUtils::identity();
-    assert!(QuatLattice::inclusion(&lat, &cmp));
+    lat.generators = identity_gens();
+    cmp.generators = identity_gens();
+    assert!(TestLattice::inclusion(&lat, &cmp));
 
     lat.denom = b(5);
     cmp.denom = b(4);
-    assert!(!QuatLattice::inclusion(&lat, &cmp));
+    assert!(!TestLattice::inclusion(&lat, &cmp));
 
     lat.denom = b(1);
     cmp.denom = b(3);
-    assert!(QuatLattice::inclusion(&lat, &cmp));
+    assert!(TestLattice::inclusion(&lat, &cmp));
 
     lat.denom = b(3);
     cmp.denom = b(3);
-    assert!(QuatLattice::inclusion(&lat, &cmp));
+    assert!(TestLattice::inclusion(&lat, &cmp));
 
-    lat.basis[0][0] = b(1);
-    lat.basis[0][3] = b(-1);
-    lat.basis[1][1] = b(-2);
-    lat.basis[2][2] = b(1);
-    lat.basis[2][1] = b(1);
-    lat.basis[3][3] = b(-3);
+    lat.generators = [
+        TestQuat::new_i32(1, 0, 0, 0),
+        TestQuat::new_i32(0, -2, 1, 0),
+        TestQuat::new_i32(0, 0, 1, 0),
+        TestQuat::new_i32(-1, 0, 0, -3),
+    ];
     lat.denom = b(6);
     lat.hnf();
 
-    cmp.basis = lat.basis.clone();
+    cmp.generators = lat.generators.clone();
     cmp.denom = b(6);
-    assert!(QuatLattice::inclusion(&lat, &cmp));
+    assert!(TestLattice::inclusion(&lat, &cmp));
 
     cmp.denom = b(12);
-    assert!(QuatLattice::inclusion(&lat, &cmp));
+    assert!(TestLattice::inclusion(&lat, &cmp));
 
     cmp.denom = b(6);
-    cmp.basis[3][3] = b(165);
-    assert!(!QuatLattice::inclusion(&lat, &cmp));
+    cmp.generators[3].coords[3] = b(165);
+    assert!(!TestLattice::inclusion(&lat, &cmp));
 }
 
 #[test]
 fn test_lattice_reduce_denom() {
-    let mut lat = QuatLattice::<BigInt>::zero();
-    let mut cmp = QuatLattice::<BigInt>::zero();
+    let mut lat = TestLattice::zero();
+    let mut cmp = TestLattice::zero();
 
-    let s = 15;
-    for i in 0..4 {
-        for j in 0..4 {
-            lat.basis[i][j] = b((i as i32 + j as i32) * s);
-            cmp.basis[i][j] = b(i as i32 + j as i32);
-        }
+    let s = 15i32;
+    for idx in 0..4 {
+        let i = idx as i32;
+        lat.generators[idx] = TestQuat::new_i32(i * s, (i + 1) * s, (i + 2) * s, (i + 3) * s);
+        cmp.generators[idx] = TestQuat::new_i32(i, i + 1, i + 2, i + 3);
     }
     lat.denom = b(4 * s);
     cmp.denom = b(4);
@@ -111,35 +151,33 @@ fn test_lattice_reduce_denom() {
     let mut red = lat.clone();
     red.reduce_denom();
 
-    assert!(MatrixUtils::equal(&red.basis, &cmp.basis));
+    assert_eq!(red.generators, cmp.generators);
     assert_eq!(red.denom, cmp.denom);
 
     lat.reduce_denom();
-    assert!(MatrixUtils::equal(&lat.basis, &cmp.basis));
+    assert_eq!(lat.generators, cmp.generators);
     assert_eq!(lat.denom, cmp.denom);
 }
 
 #[test]
 fn test_lattice_conjugate_without_hnf() {
-    let mut lat = QuatLattice::<BigInt>::zero();
-    let mut cmp = QuatLattice::<BigInt>::zero();
+    let mut lat = TestLattice::zero();
+    let mut cmp = TestLattice::zero();
 
-    lat.basis = MatrixUtils::zero();
-    lat.basis[0][0] = b(4);
-    lat.basis[0][3] = b(1);
-    lat.basis[1][1] = b(-2);
-    lat.basis[2][2] = b(-1);
-    lat.basis[2][1] = b(-1);
-    lat.basis[3][3] = b(-3);
+    lat.generators = [
+        TestQuat::new_i32(4, 0, 0, 0),
+        TestQuat::new_i32(0, -2, -1, 0),
+        TestQuat::new_i32(0, 0, -1, 0),
+        TestQuat::new_i32(1, 0, 0, -3),
+    ];
     lat.denom = b(6);
 
-    cmp.basis = MatrixUtils::zero();
-    cmp.basis[0][0] = b(4);
-    cmp.basis[0][3] = b(1);
-    cmp.basis[1][1] = b(2);
-    cmp.basis[2][2] = b(1);
-    cmp.basis[2][1] = b(1);
-    cmp.basis[3][3] = b(3);
+    cmp.generators = [
+        TestQuat::new_i32(4, 0, 0, 0),
+        TestQuat::new_i32(0, 2, 1, 0),
+        TestQuat::new_i32(0, 0, 1, 0),
+        TestQuat::new_i32(1, 0, 0, 3),
+    ];
     cmp.denom = b(6);
 
     lat.hnf();
@@ -148,32 +186,32 @@ fn test_lattice_conjugate_without_hnf() {
     conj.hnf();
     cmp.hnf();
 
-    assert!(QuatLattice::equal(&conj, &cmp));
+    assert!(TestLattice::equal(&conj, &cmp));
 
     let mut conj_conj = conj.conjugate_without_hnf();
     conj_conj.hnf();
-    assert!(QuatLattice::equal(&conj_conj, &lat));
+    assert!(TestLattice::equal(&conj_conj, &lat));
 }
 
 #[test]
 fn test_lattice_dual_without_hnf() {
-    let mut lat = QuatLattice::<BigInt>::zero();
-    let mut cmp = QuatLattice::<BigInt>::zero();
+    let mut lat = TestLattice::zero();
+    let mut cmp = TestLattice::zero();
 
-    lat.basis = MatrixUtils::zero();
-    lat.basis[0][0] = b(1);
-    lat.basis[0][3] = b(-1);
-    lat.basis[1][1] = b(-2);
-    lat.basis[2][2] = b(1);
-    lat.basis[2][1] = b(1);
-    lat.basis[3][3] = b(-3);
+    lat.generators = [
+        TestQuat::new_i32(1, 0, 0, 0),
+        TestQuat::new_i32(0, -2, 1, 0),
+        TestQuat::new_i32(0, 0, 1, 0),
+        TestQuat::new_i32(-1, 0, 0, -3),
+    ];
     lat.denom = b(6);
 
-    cmp.basis = MatrixUtils::zero();
-    cmp.basis[0][0] = b(6);
-    cmp.basis[1][1] = b(3);
-    cmp.basis[2][2] = b(6);
-    cmp.basis[3][3] = b(2);
+    cmp.generators = [
+        TestQuat::new_i32(6, 0, 0, 0),
+        TestQuat::new_i32(0, 3, 0, 0),
+        TestQuat::new_i32(0, 0, 6, 0),
+        TestQuat::new_i32(0, 0, 0, 2),
+    ];
     cmp.denom = b(1);
 
     lat.hnf();
@@ -182,264 +220,242 @@ fn test_lattice_dual_without_hnf() {
     dual.hnf();
     cmp.hnf();
 
-    assert!(QuatLattice::equal(&dual, &cmp));
-    assert!(!QuatLattice::equal(&dual, &lat));
+    assert!(TestLattice::equal(&dual, &cmp));
+    assert!(!TestLattice::equal(&dual, &lat));
 
     let mut dual_dual = dual.dual_without_hnf();
     dual_dual.hnf();
-    assert!(QuatLattice::equal(&dual_dual, &lat));
+    assert!(TestLattice::equal(&dual_dual, &lat));
 }
 
 #[test]
 fn test_lattice_add() {
-    let mut lat1 = QuatLattice::<BigInt>::zero();
-    let mut lat2 = QuatLattice::<BigInt>::zero();
-    let mut cmp = QuatLattice::<BigInt>::zero();
+    let mut lat1 = TestLattice::zero();
+    let mut lat2 = TestLattice::zero();
+    let mut cmp = TestLattice::zero();
 
-    lat1.basis = MatrixUtils::zero();
-    lat2.basis = MatrixUtils::zero();
-    cmp.basis = MatrixUtils::zero();
-
-    lat1.basis[0][0] = b(44);
-    lat1.basis[0][2] = b(3);
-    lat1.basis[0][3] = b(32);
-    lat2.basis[0][0] = b(1);
-    cmp.basis[0][0] = b(2);
-    cmp.basis[0][2] = b(1);
-    lat1.basis[1][1] = b(5);
-    lat2.basis[1][1] = b(2);
-    cmp.basis[1][1] = b(1);
-    lat1.basis[2][2] = b(3);
-    lat2.basis[2][2] = b(1);
-    cmp.basis[2][2] = b(1);
-    lat1.basis[3][3] = b(1);
-    lat2.basis[3][3] = b(3);
-    cmp.basis[3][3] = b(3);
-
+    lat1.generators = [
+        TestQuat::new_i32(44, 0, 0, 0),
+        TestQuat::new_i32(0, 5, 0, 0),
+        TestQuat::new_i32(3, 0, 3, 0),
+        TestQuat::new_i32(32, 0, 0, 1),
+    ];
+    lat2.generators = [
+        TestQuat::new_i32(1, 0, 0, 0),
+        TestQuat::new_i32(0, 2, 0, 0),
+        TestQuat::new_i32(0, 0, 1, 0),
+        TestQuat::new_i32(0, 0, 0, 3),
+    ];
+    cmp.generators = [
+        TestQuat::new_i32(2, 0, 0, 0),
+        TestQuat::new_i32(0, 1, 0, 0),
+        TestQuat::new_i32(1, 0, 1, 0),
+        TestQuat::new_i32(0, 0, 0, 3),
+    ];
     lat1.denom = b(4);
     lat2.denom = b(6);
     cmp.denom = b(12);
 
-    let sum = QuatLattice::add(&lat1, &lat2);
-    assert!(MatrixUtils::equal(&sum.basis, &cmp.basis));
+    let sum = &lat1 + &lat2;
+    assert_eq!(sum.generators, cmp.generators);
     assert_eq!(sum.denom, cmp.denom);
 
-    lat1.basis = MatrixUtils::zero();
-    lat2.basis = MatrixUtils::zero();
-
-    lat1.basis[0][0] = b(4);
-    lat1.basis[0][2] = b(3);
-    lat2.basis[0][0] = b(1);
-    lat2.basis[0][3] = b(-1);
-    lat1.basis[1][1] = b(5);
-    lat2.basis[1][1] = b(-2);
-    lat1.basis[2][2] = b(3);
-    lat2.basis[2][2] = b(1);
-    lat2.basis[2][1] = b(1);
-    lat1.basis[3][3] = b(7);
-    lat2.basis[3][3] = b(-3);
+    lat1.generators = [
+        TestQuat::new_i32(4, 0, 0, 0),
+        TestQuat::new_i32(0, 5, 0, 0),
+        TestQuat::new_i32(3, 0, 3, 0),
+        TestQuat::new_i32(0, 0, 0, 7),
+    ];
+    lat2.generators = [
+        TestQuat::new_i32(1, 0, 0, 0),
+        TestQuat::new_i32(0, -2, 1, 0),
+        TestQuat::new_i32(0, 0, 1, 0),
+        TestQuat::new_i32(-1, 0, 0, -3),
+    ];
     lat1.denom = b(4);
     lat2.denom = b(6);
 
-    let sum2 = QuatLattice::add(&lat1, &lat2);
-    assert!(MatrixUtils::equal(&sum2.basis, &cmp.basis));
+    let sum2 = &lat1 + &lat2;
+    assert_eq!(sum2.generators, cmp.generators);
     assert_eq!(sum2.denom, cmp.denom);
 
-    cmp.basis = lat2.basis.clone();
+    cmp.generators = lat2.generators.clone();
     cmp.denom = lat2.denom.clone();
     cmp.hnf();
 
-    let sum_self = QuatLattice::add(&lat2, &lat2);
-    assert!(MatrixUtils::equal(&sum_self.basis, &cmp.basis));
+    let sum_self = &lat2 + &lat2;
+    assert_eq!(sum_self.generators, cmp.generators);
     assert_eq!(sum_self.denom, cmp.denom);
 }
 
 #[test]
 fn test_lattice_intersect() {
-    let mut lat1 = QuatLattice::<BigInt>::zero();
-    let mut lat2 = QuatLattice::<BigInt>::zero();
-    let mut cmp = QuatLattice::<BigInt>::zero();
+    let mut lat1 = TestLattice::zero();
+    let mut lat2 = TestLattice::zero();
+    let mut cmp = TestLattice::zero();
 
-    lat1.basis = MatrixUtils::zero();
-    lat2.basis = MatrixUtils::zero();
-    cmp.basis = MatrixUtils::zero();
-
-    lat1.basis[0][0] = b(4);
-    lat1.basis[0][2] = b(3);
-    lat2.basis[0][0] = b(1);
-    lat2.basis[0][3] = b(-1);
-    lat1.basis[1][1] = b(5);
-    lat2.basis[1][1] = b(-2);
-    lat1.basis[2][2] = b(3);
-    lat2.basis[2][2] = b(1);
-    lat2.basis[2][1] = b(1);
-    lat1.basis[3][3] = b(7);
-    lat2.basis[3][3] = b(-3);
+    lat1.generators = [
+        TestQuat::new_i32(4, 0, 0, 0),
+        TestQuat::new_i32(0, 5, 0, 0),
+        TestQuat::new_i32(3, 0, 3, 0),
+        TestQuat::new_i32(0, 0, 0, 7),
+    ];
+    lat2.generators = [
+        TestQuat::new_i32(1, 0, 0, 0),
+        TestQuat::new_i32(0, -2, 1, 0),
+        TestQuat::new_i32(0, 0, 1, 0),
+        TestQuat::new_i32(-1, 0, 0, -3),
+    ];
     lat1.denom = b(4);
     lat2.denom = b(6);
     lat1.hnf();
     lat2.hnf();
 
-    cmp.basis[0][0] = b(2);
-    cmp.basis[0][2] = b(1);
-    cmp.basis[1][1] = b(10);
-    cmp.basis[2][2] = b(3);
-    cmp.basis[3][3] = b(7);
+    cmp.generators = [
+        TestQuat::new_i32(2, 0, 0, 0),
+        TestQuat::new_i32(0, 10, 0, 0),
+        TestQuat::new_i32(1, 0, 3, 0),
+        TestQuat::new_i32(0, 0, 0, 7),
+    ];
     cmp.denom = b(2);
 
-    let inter = QuatLattice::intersect(&lat1, &lat2);
-    assert!(QuatLattice::equal(&inter, &cmp));
+    let inter = TestLattice::intersect(&lat1, &lat2);
+    assert!(TestLattice::equal(&inter, &cmp));
 
-    let inter2 = QuatLattice::intersect(&lat2, &lat1);
-    assert!(QuatLattice::equal(&inter2, &cmp));
+    let inter2 = TestLattice::intersect(&lat2, &lat1);
+    assert!(TestLattice::equal(&inter2, &cmp));
 
-    cmp.basis = lat1.basis.clone();
+    cmp.generators = lat1.generators.clone();
     cmp.denom = lat1.denom.clone();
-    let inter_self = QuatLattice::intersect(&lat1, &lat1);
-    assert!(QuatLattice::equal(&inter_self, &cmp));
+    let inter_self = TestLattice::intersect(&lat1, &lat1);
+    assert!(TestLattice::equal(&inter_self, &cmp));
 }
 
 #[test]
 fn test_lattice_alg_elem_mul() {
-    let mut lat = QuatLattice::<BigInt>::zero();
-    let mut cmp = QuatLattice::<BigInt>::zero();
-    let alg = QuatAlg::new(b(23));
+    let mut lat = TestLattice23::zero();
+    let mut cmp = TestLattice23::zero();
 
-    let elem = QuatElem::new_i32(2, 3, 4, -1, 0);
+    let elem = TestRatQuat23::new_i32(2, 3, 4, -1, 0);
 
-    lat.basis = MatrixUtils::zero();
-    lat.basis[0][0] = b(11);
-    lat.basis[1][1] = b(-13);
-    lat.basis[2][2] = b(15);
-    lat.basis[3][3] = b(-4);
-    lat.basis[0][1] = b(2);
-    lat.basis[1][3] = b(-1);
+    lat.generators = [
+        TestQuat23::new_i32(11, 0, 0, 0),
+        TestQuat23::new_i32(2, -13, 0, 0),
+        TestQuat23::new_i32(0, 0, 15, 0),
+        TestQuat23::new_i32(0, -1, 0, -4),
+    ];
     lat.denom = b(5);
     lat.hnf();
 
-    let prod = QuatLattice::alg_elem_mul(&lat, &elem, &alg);
+    let prod = &lat * &elem;
 
-    cmp.basis = MatrixUtils::zero();
-    cmp.basis[0][0] = b(33);
-    cmp.basis[1][0] = b(44);
-    cmp.basis[2][0] = b(-11);
-    cmp.basis[3][0] = b_zero();
-    cmp.basis[0][1] = b(27 - 4 * 13);
-    cmp.basis[1][1] = b(36 + 3 * 13);
-    cmp.basis[2][1] = b(-9);
-    cmp.basis[3][1] = b(-13);
-    cmp.basis[0][2] = b(15 * 23);
-    cmp.basis[1][2] = b_zero();
-    cmp.basis[2][2] = b(45);
-    cmp.basis[3][2] = b(-60);
-    cmp.basis[0][3] = b(-4);
-    cmp.basis[1][3] = b(3 + 23 * 4);
-    cmp.basis[2][3] = b(16);
-    cmp.basis[3][3] = b(-1 + 4 * 3);
+    cmp.generators = [
+        TestQuat23::new_i32(33, 44, -11, 0),
+        TestQuat23::new_i32(27 - 4 * 13, 36 + 3 * 13, -9, -13),
+        TestQuat23::new_i32(15 * 23, 0, 45, -60),
+        TestQuat23::new_i32(-4, 3 + 23 * 4, 16, -1 + 4 * 3),
+    ];
     cmp.denom = b(10);
     cmp.hnf();
 
-    assert!(QuatLattice::equal(&cmp, &prod));
+    assert!(TestLattice23::equal(&cmp, &prod));
 
-    let prod2 = QuatLattice::alg_elem_mul(&lat, &elem, &alg);
-    assert!(QuatLattice::equal(&cmp, &prod2));
+    let prod2 = &lat * &elem;
+    assert!(TestLattice23::equal(&cmp, &prod2));
 }
 
 #[test]
 fn test_lattice_mul() {
-    let mut lat1 = QuatLattice::<BigInt>::zero();
-    let mut lat2 = QuatLattice::<BigInt>::zero();
-    let mut cmp = QuatLattice::<BigInt>::zero();
-    let alg = QuatAlg::new(b(19));
+    let mut lat1 = TestLattice19::zero();
+    let mut lat2 = TestLattice19::zero();
+    let mut cmp = TestLattice19::zero();
 
-    lat1.basis = MatrixUtils::zero();
-    lat2.basis = MatrixUtils::zero();
-    cmp.basis = MatrixUtils::zero();
-
-    lat1.basis[0][0] = b(44);
-    lat1.basis[0][2] = b(3);
-    lat1.basis[0][3] = b(32);
-    lat2.basis[0][0] = b(1);
-    cmp.basis[0][0] = b(1);
-    lat1.basis[1][1] = b(5);
-    lat2.basis[1][1] = b(2);
-    cmp.basis[1][1] = b(1);
-    lat1.basis[2][2] = b(3);
-    lat2.basis[2][2] = b(1);
-    cmp.basis[2][2] = b(1);
-    lat1.basis[3][3] = b(1);
-    lat2.basis[3][3] = b(3);
-    cmp.basis[3][3] = b(1);
+    lat1.generators = [
+        TestQuat19::new_i32(44, 0, 0, 0),
+        TestQuat19::new_i32(0, 5, 0, 0),
+        TestQuat19::new_i32(3, 0, 3, 0),
+        TestQuat19::new_i32(32, 0, 0, 1),
+    ];
+    lat2.generators = [
+        TestQuat19::new_i32(1, 0, 0, 0),
+        TestQuat19::new_i32(0, 2, 0, 0),
+        TestQuat19::new_i32(0, 0, 1, 0),
+        TestQuat19::new_i32(0, 0, 0, 3),
+    ];
+    cmp.generators = [
+        TestQuat19::new_i32(1, 0, 0, 0),
+        TestQuat19::new_i32(0, 1, 0, 0),
+        TestQuat19::new_i32(0, 0, 1, 0),
+        TestQuat19::new_i32(0, 0, 0, 1),
+    ];
     lat1.denom = b(4);
     lat2.denom = b(6);
     cmp.denom = b(24);
 
-    let prod = QuatLattice::mul(&lat1, &lat2, &alg);
-    assert!(MatrixUtils::equal(&prod.basis, &cmp.basis));
+    let prod = &lat1 * &lat2;
+    assert_eq!(prod.generators, cmp.generators);
     assert_eq!(prod.denom, cmp.denom);
 
-    lat1.basis = MatrixUtils::zero();
-    lat2.basis = MatrixUtils::zero();
-
-    lat1.basis[0][0] = b(4);
-    lat1.basis[0][2] = b(3);
-    lat2.basis[0][0] = b(1);
-    lat2.basis[0][3] = b(-1);
-    lat1.basis[1][1] = b(5);
-    lat2.basis[1][1] = b(-2);
-    lat1.basis[2][2] = b(3);
-    lat2.basis[2][2] = b(1);
-    lat2.basis[2][1] = b(1);
-    lat1.basis[3][3] = b(7);
-    lat2.basis[3][3] = b(-3);
+    lat1.generators = [
+        TestQuat19::new_i32(4, 0, 0, 0),
+        TestQuat19::new_i32(0, 5, 0, 0),
+        TestQuat19::new_i32(3, 0, 3, 0),
+        TestQuat19::new_i32(0, 0, 0, 7),
+    ];
+    lat2.generators = [
+        TestQuat19::new_i32(1, 0, 0, 0),
+        TestQuat19::new_i32(0, -2, 1, 0),
+        TestQuat19::new_i32(0, 0, 1, 0),
+        TestQuat19::new_i32(-1, 0, 0, -3),
+    ];
     lat1.denom = b(4);
     lat2.denom = b(6);
 
-    let prod2 = QuatLattice::mul(&lat1, &lat2, &alg);
-    assert!(MatrixUtils::equal(&prod2.basis, &cmp.basis));
+    let prod2 = &lat1 * &lat2;
+    assert_eq!(prod2.generators, cmp.generators);
     assert_eq!(prod2.denom, cmp.denom);
 
-    cmp.basis = MatrixUtils::zero();
-    cmp.basis[0][0] = b(1);
-    cmp.basis[1][1] = b(1);
-    cmp.basis[2][2] = b(1);
-    cmp.basis[3][3] = b(1);
+    cmp.generators = [
+        TestQuat19::new_i32(1, 0, 0, 0),
+        TestQuat19::new_i32(0, 1, 0, 0),
+        TestQuat19::new_i32(0, 0, 1, 0),
+        TestQuat19::new_i32(0, 0, 0, 1),
+    ];
     cmp.denom = b(36);
 
-    let prod_self = QuatLattice::mul(&lat2, &lat2, &alg);
-    assert!(MatrixUtils::equal(&prod_self.basis, &cmp.basis));
+    let prod_self = &lat2 * &lat2;
+    assert_eq!(prod_self.generators, cmp.generators);
     assert_eq!(prod_self.denom, cmp.denom);
 }
 
 #[test]
 fn test_lattice_contains() {
-    // let alg = QuatAlg::new(b(103));
-    let mut lat = QuatLattice::<BigInt>::zero();
+    let mut lat = TestLattice::zero();
 
-    lat.basis = MatrixUtils::zero();
-    lat.basis[0][0] = b(4);
-    lat.basis[0][2] = b(3);
-    lat.basis[1][1] = b(5);
-    lat.basis[2][2] = b(3);
-    lat.basis[3][3] = b(7);
+    lat.generators = [
+        TestQuat::new_i32(4, 0, 0, 0),
+        TestQuat::new_i32(0, 5, 0, 0),
+        TestQuat::new_i32(3, 0, 3, 0),
+        TestQuat::new_i32(0, 0, 0, 7),
+    ];
     lat.denom = b(4);
 
-    let x = QuatElem::new_i32(3, 1, -2, 26, 9);
+    let x = TestRatQuat::new_i32(3, 1, -2, 26, 9);
     assert!(lat.contains(&x).is_none());
 
-    lat.basis = MatrixUtils::zero();
-    lat.basis[0][0] = b(1);
-    lat.basis[0][3] = b(-1);
-    lat.basis[1][1] = b(-2);
-    lat.basis[2][2] = b(1);
-    lat.basis[2][1] = b(1);
-    lat.basis[3][3] = b(-3);
+    lat.generators = [
+        TestQuat::new_i32(1, 0, 0, 0),
+        TestQuat::new_i32(0, -2, 1, 0),
+        TestQuat::new_i32(0, 0, 1, 0),
+        TestQuat::new_i32(-1, 0, 0, -3),
+    ];
     lat.denom = b(6);
     lat.hnf();
 
     let coord_res = lat.contains(&x);
     assert!(coord_res.is_some());
     let coord = coord_res.unwrap();
+    
     assert_eq!(coord[0], b(2));
     assert_eq!(coord[1], b(-2));
     assert_eq!(coord[2], b(52));
@@ -448,88 +464,67 @@ fn test_lattice_contains() {
 
 #[test]
 fn test_lattice_index() {
-    let mut sublat = QuatLattice::<BigInt>::zero();
-    let mut overlat = QuatLattice::<BigInt>::zero();
+    let mut sublat = TestLattice::zero();
+    let mut overlat = TestLattice::zero();
 
-    sublat.basis = MatrixUtils::zero();
-    overlat.basis = MatrixUtils::identity();
+    overlat.generators = identity_gens();
     overlat.denom = b(2);
 
-    sublat.basis[0][0] = b(2);
-    sublat.basis[0][1] = b_zero();
-    sublat.basis[0][2] = b(1);
-    sublat.basis[0][3] = b_zero();
-
-    sublat.basis[1][0] = b_zero();
-    sublat.basis[1][1] = b(4);
-    sublat.basis[1][2] = b(2);
-    sublat.basis[1][3] = b(3);
-
-    sublat.basis[2][0] = b_zero();
-    sublat.basis[2][1] = b_zero();
-    sublat.basis[2][2] = b(1);
-    sublat.basis[2][3] = b_zero();
-
-    sublat.basis[3][0] = b_zero();
-    sublat.basis[3][1] = b_zero();
-    sublat.basis[3][2] = b_zero();
-    sublat.basis[3][3] = b(1);
-
+    sublat.generators = [
+        TestQuat::new_i32(2, 0, 0, 0),
+        TestQuat::new_i32(0, 4, 0, 0),
+        TestQuat::new_i32(1, 2, 1, 0),
+        TestQuat::new_i32(0, 3, 0, 1),
+    ];
     sublat.denom = b(2);
 
-    let index = QuatLattice::index(&sublat, &overlat);
+    let index = TestLattice::index(&sublat, &overlat);
     assert_eq!(index, b(8));
 }
 
 #[test]
 fn test_lattice_hnf() {
-    let mut lat = QuatLattice::<BigInt>::zero();
-    let mut cmp = QuatLattice::<BigInt>::zero();
+    let mut lat = TestLattice::zero();
+    let mut cmp = TestLattice::zero();
 
-    lat.basis = MatrixUtils::zero();
-    cmp.basis = MatrixUtils::zero();
-
-    lat.basis[0][0] = b(1);
-    lat.basis[0][3] = b(-1);
-    lat.basis[1][1] = b(-2);
-    lat.basis[2][2] = b(1);
-    lat.basis[2][1] = b(1);
-    lat.basis[3][3] = b(-3);
-
-    cmp.basis[0][0] = b(1);
-    cmp.basis[1][1] = b(2);
-    cmp.basis[2][2] = b(1);
-    cmp.basis[3][3] = b(3);
+    lat.generators = [
+        TestQuat::new_i32(1, 0, 0, 0),
+        TestQuat::new_i32(0, -2, 1, 0),
+        TestQuat::new_i32(0, 0, 1, 0),
+        TestQuat::new_i32(-1, 0, 0, -3),
+    ];
+    cmp.generators = [
+        TestQuat::new_i32(1, 0, 0, 0),
+        TestQuat::new_i32(0, 2, 0, 0),
+        TestQuat::new_i32(0, 0, 1, 0),
+        TestQuat::new_i32(0, 0, 0, 3),
+    ];
 
     cmp.denom = b(6);
     lat.denom = b(6);
 
     lat.hnf();
 
-    assert!(MatrixUtils::equal(&lat.basis, &cmp.basis));
+    assert_eq!(lat.generators, cmp.generators);
     assert_eq!(lat.denom, cmp.denom);
 }
 
 #[test]
 fn test_lattice_gram() {
-    let mut lattice = QuatLattice::<BigInt>::zero();
-    let alg = QuatAlg::new(b(103));
+    let mut lattice = TestLattice::zero();
 
-    lattice.basis = MatrixUtils::zero();
-    lattice.basis[0][0] = b(202);
-    lattice.basis[1][1] = b(202);
-    lattice.basis[2][2] = b(1);
-    lattice.basis[3][3] = b(1);
-    lattice.basis[0][2] = b(158);
-    lattice.basis[0][3] = b(53);
-    lattice.basis[1][2] = b(149);
-    lattice.basis[1][3] = b(158);
+    lattice.generators = [
+        TestQuat::new_i32(202, 0, 0, 0),
+        TestQuat::new_i32(0, 202, 0, 0),
+        TestQuat::new_i32(158, 149, 1, 0),
+        TestQuat::new_i32(53, 158, 0, 1),
+    ];
     lattice.denom = b(2);
 
-    let gram = lattice.gram(&alg);
+    let gram = lattice.gram();
 
-    let elem1 = QuatElem::new_i32(2, 360, 149, 1, 0);
-    let elem2 = QuatElem::new_i32(2, 53, 360, 0, 1);
+    let elem1 = TestRatQuat::new_i32(2, 360, 149, 1, 0);
+    let elem2 = TestRatQuat::new_i32(2, 53, 360, 0, 1);
 
     let vec1_opt = lattice.contains(&elem1);
     let vec2_opt = lattice.contains(&elem2);
@@ -539,11 +534,9 @@ fn test_lattice_gram() {
     let vec1 = vec1_opt.unwrap();
     let vec2 = vec2_opt.unwrap();
 
-    let mut elem2_conj = elem2.clone();
-    elem2_conj = elem2_conj.conj();
-    let prod = elem1.mul(&elem2_conj, &alg);
+    let prod = &elem1 * &elem2.conj();
 
-    let norm1 = (prod.coord[0].clone() * b(2)) / prod.denom.clone();
+    let norm1 = (prod.num.coords[0].clone() * b(2)) / prod.denom.clone();
 
     let mut vec1_gram = [b_zero(), b_zero(), b_zero(), b_zero()];
     for i in 0..4 {

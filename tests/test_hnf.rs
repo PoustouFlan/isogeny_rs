@@ -1,11 +1,24 @@
-// tests/test_hnf.rs
-
-use isogeny::quaternion::algebra::BigIntAlg;
+use isogeny::quaternion::algebra::{BigIntAlg, IntQuat, QuatConfig};
 use isogeny::quaternion::hnf::*;
-use isogeny::quaternion::matrix::{Mat4x4, MatrixUtils};
+use isogeny::quaternion::matrix::MatrixUtils;
 use num_bigint::BigInt;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use std::sync::LazyLock;
+
+// ========================================================================
+// Test Configuration
+// ========================================================================
+
+pub struct P103;
+static P103_VAL: LazyLock<BigInt> = LazyLock::new(|| BigInt::from(103));
+impl QuatConfig<BigInt> for P103 {
+    fn p() -> &'static BigInt {
+        &P103_VAL
+    }
+}
+
+type TestQuat = IntQuat<BigInt, P103>;
 
 // Helper functions to unambiguously target BigIntAlg methods
 #[inline]
@@ -14,184 +27,177 @@ fn b_zero() -> BigInt { <BigInt as BigIntAlg>::zero() }
 fn b_one() -> BigInt { <BigInt as BigIntAlg>::one() }
 
 /// Helper function to strictly verify if a matrix is in SQISign's Row Hermite Normal Form
-fn assert_is_hnf(mat: &Mat4x4<BigInt>) {
+fn assert_is_hnf(mat: &[TestQuat; 4]) {
     let zero = b_zero();
-    
+
     for i in 0..4 {
-        // 1. Must be upper triangular (lower-left is 0)
-        for j in 0..i {
+        for j in (i + 1)..4 {
             assert_eq!(
-                mat[i][j], zero,
-                "HNF Failed: Not upper triangular at [{}][{}]. Value: {:?}", i, j, mat[i][j]
+                mat[i].coords[j], zero,
+                "HNF Failed: Not upper triangular at col {}, row {}. Value: {:?}", i, j, mat[i].coords[j]
             );
         }
 
-        // 2. Pivot (diagonal) must be strictly positive
         assert!(
-            mat[i][i] > zero,
-            "HNF Failed: Diagonal pivot not positive at [{}][{}]. Value: {:?}", i, i, mat[i][i]
+            mat[i].coords[i] > zero,
+            "HNF Failed: Diagonal pivot not positive at col {}, row {}. Value: {:?}", i, i, mat[i].coords[i]
         );
 
-        // 3. Elements TO THE RIGHT of the pivot must be >= 0 and strictly < ROW pivot
         for j in (i + 1)..4 {
             assert!(
-                mat[i][j] >= zero,
-                "HNF Failed: Element to right is negative at [{}][{}]. Value: {:?}", i, j, mat[i][j]
+                mat[j].coords[i] >= zero,
+                "HNF Failed: Element to right is negative at col {}, row {}. Value: {:?}", j, i, mat[j].coords[i]
             );
             assert!(
-                mat[i][j] < mat[i][i],
-                "HNF Failed: Element to right >= row pivot at [{}][{}]. Value: {:?} >= {:?}",
-                i, j, mat[i][j], mat[i][i]
+                mat[j].coords[i] < mat[i].coords[i],
+                "HNF Failed: Element to right >= row pivot at col {}, row {}. Value: {:?} >= {:?}",
+                j, i, mat[j].coords[i], mat[i].coords[i]
             );
         }
     }
 }
 
 #[test]
-fn test_mod_not_zero() {
+fn test_positive_mod() {
     let modulo = BigInt::from_i32(3);
-    
-    assert_eq!(mod_not_zero(&BigInt::from_i32(5), &modulo), BigInt::from_i32(2));
-    assert_eq!(mod_not_zero(&BigInt::from_i32(6), &modulo), BigInt::from_i32(3));
-    assert_eq!(mod_not_zero(&BigInt::from_i32(-1), &modulo), BigInt::from_i32(2));
+
+    assert_eq!(BigInt::from_i32(5).positive_mod(&modulo), BigInt::from_i32(2));
+    assert_eq!(BigInt::from_i32(6).positive_mod(&modulo), b_zero());
+    assert_eq!(BigInt::from_i32(-1).positive_mod(&modulo), BigInt::from_i32(2));
 }
 
 #[test]
 fn test_centered_mod() {
     let modulo = BigInt::from_i32(3);
-    
-    assert_eq!(centered_mod(&BigInt::from_i32(5), &modulo), BigInt::from_i32(-1));
-    assert_eq!(centered_mod(&BigInt::from_i32(4), &modulo), BigInt::from_i32(1));
-    assert_eq!(centered_mod(&BigInt::from_i32(6), &modulo), b_zero());
+
+    assert_eq!(BigInt::from_i32(5).centered_mod(&modulo), BigInt::from_i32(-1));
+    assert_eq!(BigInt::from_i32(4).centered_mod(&modulo), BigInt::from_i32(1));
+    assert_eq!(BigInt::from_i32(6).centered_mod(&modulo), b_zero());
 }
 
 #[test]
 fn test_xgcd_with_u_not_0() {
     let a = b_zero();
     let b = BigInt::from_i32(5);
-    
+
     let (d, u, v) = xgcd_with_u_not_0(&a, &b);
-    
+
     assert_eq!(d, BigInt::from_i32(5));
     assert!(!BigIntAlg::is_zero(&u), "xgcd_with_u_not_0 failed to guarantee u != 0");
-    
+
     let res = a.clone() * u.clone() + b.clone() * v.clone();
     assert_eq!(res, d, "Bezout identity failed");
 }
 
 #[test]
 fn test_mat_4x4_inv_with_det_as_denom() {
-    
-    let mut mat = MatrixUtils::zero::<BigInt>();
-    mat[0][0] = BigInt::from_i32(1);
-    mat[1][1] = BigInt::from_i32(4);
-    mat[2][2] = BigInt::from_i32(1);
-    mat[3][3] = BigInt::from_i32(1);
-    mat[0][1] = BigInt::from_i32(2);
-    mat[1][0] = BigInt::from_i32(3);
+    let mut mat = [TestQuat::zero(), TestQuat::zero(), TestQuat::zero(), TestQuat::zero()];
+    mat[0].coords[0] = BigInt::from_i32(1);
+    mat[1].coords[1] = BigInt::from_i32(4);
+    mat[2].coords[2] = BigInt::from_i32(1);
+    mat[3].coords[3] = BigInt::from_i32(1);
+    mat[1].coords[0] = BigInt::from_i32(2); // Col 1, Row 0
+    mat[0].coords[1] = BigInt::from_i32(3); // Col 0, Row 1
 
-    let mut adj = MatrixUtils::zero::<BigInt>();
-    let det = mat_4x4_inv_with_det_as_denom(Some(&mut adj), &mat);
+    let mut adj = [TestQuat::zero(), TestQuat::zero(), TestQuat::zero(), TestQuat::zero()];
+    let det = MatrixUtils::mat_4x4_inv_with_det_as_denom(Some(&mut adj), &mat);
 
     assert_eq!(det, BigInt::from_i32(-2));
 
-    let mut prod = MatrixUtils::zero::<BigInt>();
+    let mut prod = [TestQuat::zero(), TestQuat::zero(), TestQuat::zero(), TestQuat::zero()];
     for i in 0..4 {
         for j in 0..4 {
             let mut sum = b_zero();
             for k in 0..4 {
-                sum = sum + adj[i][k].clone() * mat[k][j].clone();
+                sum = sum + adj[j].coords[k].clone() * mat[k].coords[i].clone();
             }
-            prod[i][j] = sum;
+            prod[j].coords[i] = sum;
         }
     }
 
-    let mut expected = MatrixUtils::zero::<BigInt>();
+    let mut expected = [TestQuat::zero(), TestQuat::zero(), TestQuat::zero(), TestQuat::zero()];
     for i in 0..4 {
-        expected[i][i] = det.clone();
+        expected[i].coords[i] = det.clone();
     }
 
-    assert!(MatrixUtils::equal(&prod, &expected), "Adjugate multiplication property failed");
+    assert_eq!(prod, expected, "Adjugate multiplication property failed");
 }
 
 #[test]
-fn test_mat_4xn_hnf_mod_core_exact_vectors() {
-
-    let mut generators = vec![[b_zero(), b_zero(), b_zero(), b_zero()]; 8];
-    generators[0][0] = BigInt::from(4);
-    generators[2][0] = BigInt::from(3);
-    generators[4][0] = BigInt::from(1);
-    generators[7][0] = BigInt::from(-1);
-    generators[1][1] = BigInt::from(5);
-    generators[5][1] = BigInt::from(-2);
-    generators[2][2] = BigInt::from(3);
-    generators[6][2] = BigInt::from(1);
-    generators[5][2] = BigInt::from(1);
-    generators[3][3] = BigInt::from(7);
-    generators[7][3] = BigInt::from(-3);
+fn test_quat_hnf_mod_core_exact_vectors() {
+    let mut generators = vec![TestQuat::zero(); 8];
+    generators[0].coords[0] = BigInt::from(4);
+    generators[2].coords[0] = BigInt::from(3);
+    generators[4].coords[0] = BigInt::from(1);
+    generators[7].coords[0] = BigInt::from(-1);
+    generators[1].coords[1] = BigInt::from(5);
+    generators[5].coords[1] = BigInt::from(-2);
+    generators[2].coords[2] = BigInt::from(3);
+    generators[6].coords[2] = BigInt::from(1);
+    generators[5].coords[2] = BigInt::from(1);
+    generators[3].coords[3] = BigInt::from(7);
+    generators[7].coords[3] = BigInt::from(-3);
 
     let det = BigInt::from(1);
-    let mut hnf = MatrixUtils::zero::<BigInt>();
-    
-    mat_4xn_hnf_mod_core(&mut hnf, &generators, &det);
-    
-    let identity = MatrixUtils::identity::<BigInt>();
-    assert!(MatrixUtils::equal(&identity, &hnf), "Identity vector test failed");
+    let hnf = quat_hnf_mod_core(&mut generators, &det);
 
-    let mut generators = vec![[b_zero(), b_zero(), b_zero(), b_zero()]; 8];
-    generators[4][0] = BigInt::from(438);
-    generators[4][1] = BigInt::from(400);
-    generators[4][2] = BigInt::from(156);
-    generators[4][3] = BigInt::from(-2);
-    generators[5][0] = BigInt::from(-400);
-    generators[5][1] = BigInt::from(438);
-    generators[5][2] = BigInt::from(2);
-    generators[5][3] = BigInt::from(156);
-    generators[6][0] = BigInt::from(-28826);
-    generators[6][1] = BigInt::from(-148);
-    generators[6][2] = BigInt::from(220);
-    generators[6][3] = BigInt::from(-122);
-    generators[7][0] = BigInt::from(586);
-    generators[7][1] = BigInt::from(-28426);
-    generators[7][2] = BigInt::from(278);
-    generators[7][3] = BigInt::from(218);
+    let mut identity = [TestQuat::zero(), TestQuat::zero(), TestQuat::zero(), TestQuat::zero()];
+    for i in 0..4 {
+        identity[i].coords[i] = b_one();
+    }
+    assert_eq!(identity, hnf, "Identity vector test failed");
 
-    let mut expected_cmp = MatrixUtils::zero::<BigInt>();
-    expected_cmp[0][0] = BigInt::from(2321156);
-    expected_cmp[1][1] = BigInt::from(2321156);
-    expected_cmp[0][2] = BigInt::from(620252);
-    expected_cmp[1][2] = BigInt::from(365058);
-    expected_cmp[2][2] = BigInt::from(2);
-    expected_cmp[0][3] = BigInt::from(1956098);
-    expected_cmp[1][3] = BigInt::from(620252);
-    expected_cmp[3][3] = BigInt::from(2);
+    let mut generators = vec![TestQuat::zero(); 8];
+    generators[4].coords[0] = BigInt::from(438);
+    generators[4].coords[1] = BigInt::from(400);
+    generators[4].coords[2] = BigInt::from(156);
+    generators[4].coords[3] = BigInt::from(-2);
+    generators[5].coords[0] = BigInt::from(-400);
+    generators[5].coords[1] = BigInt::from(438);
+    generators[5].coords[2] = BigInt::from(2);
+    generators[5].coords[3] = BigInt::from(156);
+    generators[6].coords[0] = BigInt::from(-28826);
+    generators[6].coords[1] = BigInt::from(-148);
+    generators[6].coords[2] = BigInt::from(220);
+    generators[6].coords[3] = BigInt::from(-122);
+    generators[7].coords[0] = BigInt::from(586);
+    generators[7].coords[1] = BigInt::from(-28426);
+    generators[7].coords[2] = BigInt::from(278);
+    generators[7].coords[3] = BigInt::from(218);
+
+    let mut expected_cmp = [TestQuat::zero(), TestQuat::zero(), TestQuat::zero(), TestQuat::zero()];
+    expected_cmp[0].coords[0] = BigInt::from(2321156);
+    expected_cmp[1].coords[1] = BigInt::from(2321156);
+    expected_cmp[2].coords[0] = BigInt::from(620252);
+    expected_cmp[2].coords[1] = BigInt::from(365058);
+    expected_cmp[2].coords[2] = BigInt::from(2);
+    expected_cmp[3].coords[0] = BigInt::from(1956098);
+    expected_cmp[3].coords[1] = BigInt::from(620252);
+    expected_cmp[3].coords[3] = BigInt::from(2);
 
     let det = BigInt::parse_bytes(b"21551060705344", 10).unwrap();
-    let mut hnf = MatrixUtils::zero::<BigInt>();
-    
-    mat_4xn_hnf_mod_core(&mut hnf, &generators, &det);
-    
-    assert!(MatrixUtils::equal(&expected_cmp, &hnf), "GitHub #38 exact vector test failed");
+    let hnf = quat_hnf_mod_core(&mut generators, &det);
+
+    assert_eq!(expected_cmp, hnf, "GitHub #38 exact vector test failed");
 }
 
 #[test]
-fn test_mat_4xn_hnf_mod_core_fuzzing() {
+fn test_quat_hnf_mod_core_fuzzing() {
     let mut rng = StdRng::seed_from_u64(123456789);
 
     for iteration in 0..250 {
         let n_gens = rng.random_range(4..12);
 
-        // 1. Generate a mathematically valid SQISign HNF matrix
-        let mut expected_hnf = MatrixUtils::zero::<BigInt>();
-        
+        let mut expected_hnf = [TestQuat::zero(), TestQuat::zero(), TestQuat::zero(), TestQuat::zero()];
+
         for i in 0..4 {
-            expected_hnf[i][i] = BigInt::from_i32(rng.random_range(1..25));
+            expected_hnf[i].coords[i] = BigInt::from_i32(rng.random_range(1..25));
         }
-        
+
         for i in 0..4 {
             for j in (i + 1)..4 {
-                let d_val = i32::try_from(&expected_hnf[i][i]).unwrap_or(1);
-                expected_hnf[i][j] = BigInt::from_i32(rng.random_range(0..d_val));
+                let d_val = i32::try_from(&expected_hnf[i].coords[i]).unwrap_or(1);
+                expected_hnf[j].coords[i] = BigInt::from_i32(rng.random_range(0..d_val));
             }
         }
 
@@ -199,17 +205,12 @@ fn test_mat_4xn_hnf_mod_core_fuzzing() {
 
         let mut det = b_one();
         for i in 0..4 {
-            det = det * expected_hnf[i][i].clone();
+            det = det * expected_hnf[i].coords[i].clone();
         }
 
-        let mut gens = Vec::with_capacity(n_gens);
-        for _ in 0..n_gens {
-            gens.push([b_zero(), b_zero(), b_zero(), b_zero()]);
-        }
+        let mut gens = vec![TestQuat::zero(); n_gens];
         for i in 0..4 {
-            for j in 0..4 {
-                gens[i][j] = expected_hnf[j][i].clone();
-            }
+            gens[i] = expected_hnf[i].clone();
         }
 
         let n_ops = 300;
@@ -221,7 +222,7 @@ fn test_mat_4xn_hnf_mod_core_fuzzing() {
                 if r1 != r2 {
                     let scalar = BigInt::from_i32(rng.random_range(-5..5));
                     for c in 0..4 {
-                        gens[r2][c] = gens[r2][c].clone() + scalar.clone() * gens[r1][c].clone();
+                        gens[r2].coords[c] = gens[r2].coords[c].clone() + scalar.clone() * gens[r1].coords[c].clone();
                     }
                 }
             } else if op == 1 {
@@ -233,7 +234,7 @@ fn test_mat_4xn_hnf_mod_core_fuzzing() {
             } else {
                 let r1 = rng.random_range(0..n_gens);
                 for c in 0..4 {
-                    gens[r1][c] = -gens[r1][c].clone();
+                    gens[r1].coords[c] = -gens[r1].coords[c].clone();
                 }
             }
         }
@@ -241,21 +242,20 @@ fn test_mat_4xn_hnf_mod_core_fuzzing() {
         for i in 0..n_gens {
             for c in 0..4 {
                 let scalar = BigInt::from_i32(rng.random_range(-3..4));
-                gens[i][c] = gens[i][c].clone() + scalar * det.clone();
+                gens[i].coords[c] = gens[i].coords[c].clone() + scalar * det.clone();
             }
         }
 
-        let mut computed_hnf = MatrixUtils::zero::<BigInt>();
-        mat_4xn_hnf_mod_core(&mut computed_hnf, &gens, &det);
+        let computed_hnf = quat_hnf_mod_core(&mut gens, &det);
 
-        if !MatrixUtils::equal(&expected_hnf, &computed_hnf) {
-            println!("\n[!] FUZZING FAILED ON ITERATION {}", iteration);
+        if expected_hnf != computed_hnf {
+            println!("\nFUZZING FAILED it {}", iteration);
             println!("Determinant (Modulo): {}", det);
             println!("Expected HNF Matrix:");
             for i in 0..4 { println!("  {:?}", expected_hnf[i]); }
             println!("Computed HNF Matrix:");
             for i in 0..4 { println!("  {:?}", computed_hnf[i]); }
-            panic!("mat_4xn_hnf_mod_core failed to reconstruct the original lattice.");
+            panic!("quat_hnf_mod_core failed to reconstruct the original lattice.");
         }
     }
 }

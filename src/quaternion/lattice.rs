@@ -92,11 +92,15 @@ impl<T: BigIntAlg, P: QuatConfig<T>> QuatLattice<T, P> {
         let mut inv = [IntQuat::zero(), IntQuat::zero(), IntQuat::zero(), IntQuat::zero()];
         let det = MatrixUtils::mat_4x4_inv_with_det_as_denom(Some(&mut inv), &self.generators);
 
+        let mut dual_gens = [IntQuat::zero(), IntQuat::zero(), IntQuat::zero(), IntQuat::zero()];
+
         for i in 0..4 {
-            inv[i] = &inv[i] * &self.denom;
+            for j in 0..4 {
+                dual_gens[i].coords[j] = inv[j].coords[i].clone() * self.denom.clone();
+            }
         }
 
-        Self { generators: inv, denom: det }
+        Self { generators: dual_gens, denom: det }
     }
 
     pub fn add_lazy(lat1: &Self, lat2: &Self) -> Self {
@@ -110,7 +114,7 @@ impl<T: BigIntAlg, P: QuatConfig<T>> QuatLattice<T, P> {
         for i in 0..4 { mat1[i] = generators[i].clone(); mat2[i] = generators[i+4].clone(); }
 
         let det1 = MatrixUtils::mat_4x4_inv_with_det_as_denom(None, &mat1);
-    let det2 = MatrixUtils::mat_4x4_inv_with_det_as_denom(None, &mat2);
+        let det2 = MatrixUtils::mat_4x4_inv_with_det_as_denom(None, &mat2);
 
         let mut res = Self {
             generators: quat_hnf_mod_core(&mut generators, &det1.gcd(&det2)),
@@ -124,9 +128,8 @@ impl<T: BigIntAlg, P: QuatConfig<T>> QuatLattice<T, P> {
         let dual1 = lat1.dual_without_hnf();
         let dual2 = lat2.dual_without_hnf();
         let dual_res = Self::add_lazy(&dual1, &dual2);
-
         let mut res = dual_res.dual_without_hnf();
-        res.hnf(); 
+        res.hnf(); // from SQISign repo: « could be removed if we do not expect HNF any more »
         res
     }
 
@@ -166,6 +169,79 @@ impl<T: BigIntAlg, P: QuatConfig<T>> QuatLattice<T, P> {
         res.reduce_denom();
         res
     }
+
+    pub fn contains(&self, x: &RatQuat<T, P>) -> Option<[T; 4]> {
+        let mut inv = [IntQuat::zero(), IntQuat::zero(), IntQuat::zero(), IntQuat::zero()];
+        let det = MatrixUtils::mat_4x4_inv_with_det_as_denom(Some(&mut inv), &self.generators);
+
+        let mut work_coord = [T::zero(), T::zero(), T::zero(), T::zero()];
+        for i in 0..4 {
+            let mut sum = T::zero();
+            for j in 0..4 {
+                sum = sum + inv[j].coords[i].clone() * x.num.coords[j].clone();
+            }
+            work_coord[i] = sum * self.denom.clone();
+        }
+
+        let prod = x.denom.clone() * det;
+        let mut divisible = true;
+
+        for i in 0..4 {
+            if !(work_coord[i].clone() % prod.clone()).is_zero() {
+                divisible = false;
+            }
+            work_coord[i] = work_coord[i].clone() / prod.clone();
+        }
+
+        if divisible {
+            Some(work_coord)
+        } else {
+            None
+        }
+    }
+
+    pub fn index(sublat: &Self, overlat: &Self) -> T {
+        let det_sub = MatrixUtils::mat_4x4_inv_with_det_as_denom(None, &sublat.generators);
+        let mut tmp_over = overlat.denom.clone() * overlat.denom.clone();
+        tmp_over = tmp_over.clone() * tmp_over.clone();
+        let num = det_sub * tmp_over;
+
+        let det_over = MatrixUtils::mat_4x4_inv_with_det_as_denom(None, &overlat.generators);
+        let mut tmp_sub = sublat.denom.clone() * sublat.denom.clone();
+        tmp_sub = tmp_sub.clone() * tmp_sub.clone();
+        let den = det_over * tmp_sub;
+
+        (num / den).abs()
+    }
+
+    pub fn gram(&self) -> [[T; 4]; 4] {
+        let mut g_mat = [
+            [T::zero(), T::zero(), T::zero(), T::zero()],
+            [T::zero(), T::zero(), T::zero(), T::zero()],
+            [T::zero(), T::zero(), T::zero(), T::zero()],
+            [T::zero(), T::zero(), T::zero(), T::zero()],
+        ];
+        let two = T::from_i32(2);
+        let p = P::p();
+
+        for i in 0..4 {
+            for j in 0..=i {
+                let mut sum = self.generators[i].coords[0].clone() * self.generators[j].coords[0].clone();
+                sum = sum + self.generators[i].coords[1].clone() * self.generators[j].coords[1].clone();
+                let mut p_sum = self.generators[i].coords[2].clone() * self.generators[j].coords[2].clone();
+                p_sum = p_sum + self.generators[i].coords[3].clone() * self.generators[j].coords[3].clone();
+                sum = sum + p.clone() * p_sum;
+                g_mat[i][j] = sum * two.clone();
+            }
+        }
+
+        for i in 0..4 {
+            for j in (i + 1)..4 {
+                g_mat[i][j] = g_mat[j][i].clone();
+            }
+        }
+        g_mat
+    }
 }
 
 // Eager operations bound to standard Rust operators
@@ -202,5 +278,12 @@ impl<'a, 'b, T: BigIntAlg, P: QuatConfig<T>> Mul<&'b QuatLattice<T, P>> for &'a 
         let mut res = QuatLattice::mul_lazy(self, rhs);
         res.hnf();
         res
+    }
+}
+
+impl<'a, 'b, T: BigIntAlg, P: QuatConfig<T>> Mul<&'b RatQuat<T, P>> for &'a QuatLattice<T, P> {
+    type Output = QuatLattice<T, P>;
+    fn mul(self, rhs: &'b RatQuat<T, P>) -> Self::Output {
+        QuatLattice::alg_elem_mul(self, rhs)
     }
 }

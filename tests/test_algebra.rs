@@ -240,7 +240,7 @@ fn quat_test_alg_elem_mul_by_scalar() {
     let elem = RatQ7::new_i32(2, 2, -4, 5, 25);
     let scalar = BigInt::from(6);
     
-    let prod_num = elem.num.scalar_mul(&scalar);
+    let prod_num = &elem.num * &scalar;
     let prod = RatQ7::new(prod_num, elem.denom.clone());
 
     assert_eq!(prod.denom, BigInt::from(2));
