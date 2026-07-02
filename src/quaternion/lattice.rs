@@ -108,7 +108,6 @@ impl<T: BigIntAlg, P: QuatConfig<T>> QuatLattice<T, P> {
         for i in 0..4 { generators.push(&lat2.generators[i] * &lat1.denom); }
         for i in 0..4 { generators.push(&lat1.generators[i] * &lat2.denom); }
 
-        // Since we dropped Mat4x4, we rebuild the det matrices here for the mod_val
         let mut mat1 = [IntQuat::zero(), IntQuat::zero(), IntQuat::zero(), IntQuat::zero()];
         let mut mat2 = [IntQuat::zero(), IntQuat::zero(), IntQuat::zero(), IntQuat::zero()];
         for i in 0..4 { mat1[i] = generators[i].clone(); mat2[i] = generators[i+4].clone(); }

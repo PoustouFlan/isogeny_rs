@@ -20,13 +20,11 @@ impl QuatConfig<BigInt> for P103 {
 
 type TestQuat = IntQuat<BigInt, P103>;
 
-// Helper functions to unambiguously target BigIntAlg methods
 #[inline]
 fn b_zero() -> BigInt { <BigInt as BigIntAlg>::zero() }
 #[inline]
 fn b_one() -> BigInt { <BigInt as BigIntAlg>::one() }
 
-/// Helper function to strictly verify if a matrix is in SQISign's Row Hermite Normal Form
 fn assert_is_hnf(mat: &[TestQuat; 4]) {
     let zero = b_zero();
 
@@ -96,8 +94,8 @@ fn test_mat_4x4_inv_with_det_as_denom() {
     mat[1].coords[1] = BigInt::from_i32(4);
     mat[2].coords[2] = BigInt::from_i32(1);
     mat[3].coords[3] = BigInt::from_i32(1);
-    mat[1].coords[0] = BigInt::from_i32(2); // Col 1, Row 0
-    mat[0].coords[1] = BigInt::from_i32(3); // Col 0, Row 1
+    mat[1].coords[0] = BigInt::from_i32(2);
+    mat[0].coords[1] = BigInt::from_i32(3);
 
     let mut adj = [TestQuat::zero(), TestQuat::zero(), TestQuat::zero(), TestQuat::zero()];
     let det = MatrixUtils::mat_4x4_inv_with_det_as_denom(Some(&mut adj), &mat);

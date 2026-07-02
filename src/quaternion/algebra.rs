@@ -214,17 +214,35 @@ impl<'a, 'b, T: BigIntAlg, P: QuatConfig<T>> Mul<&'b IntQuat<T, P>> for &'a IntQ
         let a = &self.coords;
         let b = &rhs.coords;
 
-        let mut c0 = a[0].clone() * b[0].clone() - a[1].clone() * b[1].clone();
-        c0 = c0 - p.clone() * (a[2].clone() * b[2].clone() + a[3].clone() * b[3].clone());
+        // Quaternion multiplication in 12 multiplications
+        // Using Gauss' optimization:
+        //    consider a = A + Bj    (A = a₀+a₁i, B = a₂+a₃i)
+        //             b = C + Dj    (C = b₀+b₁i, D = b₂+b₃i)
+        //    we then have:
+        //       (A+Bj)(C+Dj) = (AC - pBD̅) + (AD + BC̅)j
+        //    we can use Karatsuba to perform each complex multiplication
+        //    in 3 element multiplication instead of 4.
 
-        let mut c1 = p.clone() * (a[2].clone() * b[3].clone() - a[3].clone() * b[2].clone());
-        c1 = c1 + a[0].clone() * b[1].clone() + a[1].clone() * b[0].clone();
+        let m1 = a[0].clone() * b[0].clone();
+        let m2 = a[1].clone() * b[1].clone();
+        let m3 = (a[0].clone() + a[1].clone()) * (b[0].clone() + b[1].clone());
 
-        let c2 = a[0].clone() * b[2].clone() + a[2].clone() * b[0].clone()
-            - a[1].clone() * b[3].clone() + a[3].clone() * b[1].clone();
+        let m4 = a[2].clone() * b[2].clone();
+        let m5 = a[3].clone() * b[3].clone();
+        let m6 = (a[2].clone() + a[3].clone()) * (b[2].clone() - b[3].clone());
 
-        let c3 = a[0].clone() * b[3].clone() + a[3].clone() * b[0].clone()
-            - a[2].clone() * b[1].clone() + a[1].clone() * b[2].clone();
+        let m7 = a[0].clone() * b[2].clone();
+        let m8 = a[1].clone() * b[3].clone();
+        let m9 = (a[0].clone() + a[1].clone()) * (b[2].clone() + b[3].clone());
+
+        let m10 = a[2].clone() * b[0].clone();
+        let m11 = a[3].clone() * b[1].clone();
+        let m12 = (a[2].clone() + a[3].clone()) * (b[0].clone() - b[1].clone());
+
+        let c0 = (m1.clone() - m2.clone()) - p.clone() * (m4.clone() + m5.clone());
+        let c1 = (m3 - m1.clone() - m2.clone()) - p.clone() * (m6 - m4 + m5);
+        let c2 = (m7.clone() - m8.clone()) + (m10.clone() + m11.clone());
+        let c3 = (m9 - m7 - m8) + (m12 - m10 + m11);
 
         IntQuat {
             coords: [c0, c1, c2, c3],

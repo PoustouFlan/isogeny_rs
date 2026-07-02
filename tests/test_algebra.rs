@@ -239,7 +239,7 @@ fn quat_test_alg_elem_is_zero() {
 fn quat_test_alg_elem_mul_by_scalar() {
     let elem = RatQ7::new_i32(2, 2, -4, 5, 25);
     let scalar = BigInt::from(6);
-    
+
     let prod_num = &elem.num * &scalar;
     let prod = RatQ7::new(prod_num, elem.denom.clone());
 
@@ -249,6 +249,3 @@ fn quat_test_alg_elem_mul_by_scalar() {
     assert_eq!(prod.num.coords[2], BigInt::from(30));
     assert_eq!(prod.num.coords[3], BigInt::from(150));
 }
-
-// NOTE: `quat_test_alg_make_primitive` is omitted here because it relies heavily 
-// on the HNF and lattice content reduction routines which are implemented in `lattice.rs`.
