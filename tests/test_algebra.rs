@@ -209,7 +209,7 @@ fn quat_test_alg_elem_equal() {
         let mut b_norm = b.clone();
         a_norm.normalize();
         b_norm.normalize();
-        a_norm == b_norm
+        a_norm.ct_eq(&b_norm) == u32::MAX
     }
 
     let a = RatQ7::new_i32(5, 1, -3, -2, 2);

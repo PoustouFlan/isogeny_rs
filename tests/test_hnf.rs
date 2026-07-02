@@ -118,7 +118,9 @@ fn test_mat_4x4_inv_with_det_as_denom() {
         expected[i].coords[i] = det.clone();
     }
 
-    assert_eq!(prod, expected, "Adjugate multiplication property failed");
+    for i in 0..4 {
+        assert_eq!(prod[i].ct_eq(&expected[i]), u32::MAX, "Adjugate multiplication property failed");
+    }
 }
 
 #[test]
@@ -143,7 +145,9 @@ fn test_quat_hnf_mod_core_exact_vectors() {
     for i in 0..4 {
         identity[i].coords[i] = b_one();
     }
-    assert_eq!(identity, hnf, "Identity vector test failed");
+    for i in 0..4 {
+        assert_eq!(identity[i].ct_eq(&hnf[i]), u32::MAX, "Identity vector test failed");
+    }
 
     let mut generators = vec![TestQuat::zero(); 8];
     generators[4].coords[0] = BigInt::from(438);
@@ -176,7 +180,9 @@ fn test_quat_hnf_mod_core_exact_vectors() {
     let det = BigInt::parse_bytes(b"21551060705344", 10).unwrap();
     let hnf = quat_hnf_mod_core(&mut generators, &det);
 
-    assert_eq!(expected_cmp, hnf, "GitHub #38 exact vector test failed");
+    for i in 0..4 {
+        assert_eq!(expected_cmp[i].ct_eq(&hnf[i]), u32::MAX, "GitHub #38 exact vector test failed");
+    }
 }
 
 #[test]
@@ -246,7 +252,9 @@ fn test_quat_hnf_mod_core_fuzzing() {
 
         let computed_hnf = quat_hnf_mod_core(&mut gens, &det);
 
-        if expected_hnf != computed_hnf {
+        let mut eq = u32::MAX;
+        for i in 0..4 { eq &= expected_hnf[i].ct_eq(&computed_hnf[i]); }
+        if eq == 0 {
             println!("\nFUZZING FAILED it {}", iteration);
             println!("Determinant (Modulo): {}", det);
             println!("Expected HNF Matrix:");

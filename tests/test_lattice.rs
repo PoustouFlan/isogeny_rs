@@ -56,19 +56,19 @@ fn test_lattice_equal() {
 
     lat.generators = identity_gens();
     cmp.generators = identity_gens();
-    assert!(TestLattice::equal(&lat, &cmp));
+    assert_eq!(TestLattice::equal(&lat, &cmp), u32::MAX);
 
     lat.denom = b(5);
     cmp.denom = b(4);
-    assert!(!TestLattice::equal(&lat, &cmp));
+    assert_eq!(TestLattice::equal(&lat, &cmp), 0);
 
     lat.denom = b(1);
     cmp.denom = b(-1);
-    assert!(TestLattice::equal(&lat, &cmp));
+    assert_eq!(TestLattice::equal(&lat, &cmp), u32::MAX);
 
     lat.denom = b(3);
     cmp.denom = b(3);
-    assert!(TestLattice::equal(&lat, &cmp));
+    assert_eq!(TestLattice::equal(&lat, &cmp), u32::MAX);
 
     // Transposed from original matrix
     lat.generators = [
@@ -82,14 +82,14 @@ fn test_lattice_equal() {
 
     cmp.generators = lat.generators.clone();
     cmp.denom = b(6);
-    assert!(TestLattice::equal(&lat, &cmp));
+    assert_eq!(TestLattice::equal(&lat, &cmp), u32::MAX);
 
     cmp.denom = b(-7);
-    assert!(!TestLattice::equal(&lat, &cmp));
+    assert_eq!(TestLattice::equal(&lat, &cmp), 0);
 
     cmp.denom = b(6);
     cmp.generators[3].coords[3] = b(165);
-    assert!(!TestLattice::equal(&lat, &cmp));
+    assert_eq!(TestLattice::equal(&lat, &cmp), 0);
 }
 
 #[test]
@@ -99,19 +99,19 @@ fn test_lattice_inclusion() {
 
     lat.generators = identity_gens();
     cmp.generators = identity_gens();
-    assert!(TestLattice::inclusion(&lat, &cmp));
+    assert_eq!(TestLattice::inclusion(&lat, &cmp), u32::MAX);
 
     lat.denom = b(5);
     cmp.denom = b(4);
-    assert!(!TestLattice::inclusion(&lat, &cmp));
+    assert_eq!(TestLattice::inclusion(&lat, &cmp), 0);
 
     lat.denom = b(1);
     cmp.denom = b(3);
-    assert!(TestLattice::inclusion(&lat, &cmp));
+    assert_eq!(TestLattice::inclusion(&lat, &cmp), u32::MAX);
 
     lat.denom = b(3);
     cmp.denom = b(3);
-    assert!(TestLattice::inclusion(&lat, &cmp));
+    assert_eq!(TestLattice::inclusion(&lat, &cmp), u32::MAX);
 
     lat.generators = [
         TestQuat::new_i32(1, 0, 0, 0),
@@ -124,14 +124,14 @@ fn test_lattice_inclusion() {
 
     cmp.generators = lat.generators.clone();
     cmp.denom = b(6);
-    assert!(TestLattice::inclusion(&lat, &cmp));
+    assert_eq!(TestLattice::inclusion(&lat, &cmp), u32::MAX);
 
     cmp.denom = b(12);
-    assert!(TestLattice::inclusion(&lat, &cmp));
+    assert_eq!(TestLattice::inclusion(&lat, &cmp), u32::MAX);
 
     cmp.denom = b(6);
     cmp.generators[3].coords[3] = b(165);
-    assert!(!TestLattice::inclusion(&lat, &cmp));
+    assert_eq!(TestLattice::inclusion(&lat, &cmp), 0);
 }
 
 #[test]
@@ -151,12 +151,10 @@ fn test_lattice_reduce_denom() {
     let mut red = lat.clone();
     red.reduce_denom();
 
-    assert_eq!(red.generators, cmp.generators);
-    assert_eq!(red.denom, cmp.denom);
+    assert_eq!(red.ct_eq(&cmp), u32::MAX);
 
     lat.reduce_denom();
-    assert_eq!(lat.generators, cmp.generators);
-    assert_eq!(lat.denom, cmp.denom);
+    assert_eq!(lat.ct_eq(&cmp), u32::MAX);
 }
 
 #[test]
@@ -186,11 +184,11 @@ fn test_lattice_conjugate_without_hnf() {
     conj.hnf();
     cmp.hnf();
 
-    assert!(TestLattice::equal(&conj, &cmp));
+    assert_eq!(TestLattice::equal(&conj, &cmp), u32::MAX);
 
     let mut conj_conj = conj.conjugate_without_hnf();
     conj_conj.hnf();
-    assert!(TestLattice::equal(&conj_conj, &lat));
+    assert_eq!(TestLattice::equal(&conj_conj, &lat), u32::MAX);
 }
 
 #[test]
@@ -220,12 +218,12 @@ fn test_lattice_dual_without_hnf() {
     dual.hnf();
     cmp.hnf();
 
-    assert!(TestLattice::equal(&dual, &cmp));
-    assert!(!TestLattice::equal(&dual, &lat));
+    assert_eq!(TestLattice::equal(&dual, &cmp), u32::MAX);
+    assert_eq!(!TestLattice::equal(&dual, &lat), u32::MAX);
 
     let mut dual_dual = dual.dual_without_hnf();
     dual_dual.hnf();
-    assert!(TestLattice::equal(&dual_dual, &lat));
+    assert_eq!(TestLattice::equal(&dual_dual, &lat), u32::MAX);
 }
 
 #[test]
@@ -257,8 +255,7 @@ fn test_lattice_add() {
     cmp.denom = b(12);
 
     let sum = &lat1 + &lat2;
-    assert_eq!(sum.generators, cmp.generators);
-    assert_eq!(sum.denom, cmp.denom);
+    assert_eq!(sum.ct_eq(&cmp), u32::MAX);
 
     lat1.generators = [
         TestQuat::new_i32(4, 0, 0, 0),
@@ -276,16 +273,14 @@ fn test_lattice_add() {
     lat2.denom = b(6);
 
     let sum2 = &lat1 + &lat2;
-    assert_eq!(sum2.generators, cmp.generators);
-    assert_eq!(sum2.denom, cmp.denom);
+    assert_eq!(sum2.ct_eq(&cmp), u32::MAX);
 
     cmp.generators = lat2.generators.clone();
     cmp.denom = lat2.denom.clone();
     cmp.hnf();
 
     let sum_self = &lat2 + &lat2;
-    assert_eq!(sum_self.generators, cmp.generators);
-    assert_eq!(sum_self.denom, cmp.denom);
+    assert_eq!(sum_self.ct_eq(&cmp), u32::MAX);
 }
 
 #[test]
@@ -320,15 +315,15 @@ fn test_lattice_intersect() {
     cmp.denom = b(2);
 
     let inter = TestLattice::intersect(&lat1, &lat2);
-    assert!(TestLattice::equal(&inter, &cmp));
+    assert_eq!(TestLattice::equal(&inter, &cmp), u32::MAX);
 
     let inter2 = TestLattice::intersect(&lat2, &lat1);
-    assert!(TestLattice::equal(&inter2, &cmp));
+    assert_eq!(TestLattice::equal(&inter2, &cmp), u32::MAX);
 
     cmp.generators = lat1.generators.clone();
     cmp.denom = lat1.denom.clone();
     let inter_self = TestLattice::intersect(&lat1, &lat1);
-    assert!(TestLattice::equal(&inter_self, &cmp));
+    assert_eq!(TestLattice::equal(&inter_self, &cmp), u32::MAX);
 }
 
 #[test]
@@ -358,10 +353,10 @@ fn test_lattice_alg_elem_mul() {
     cmp.denom = b(10);
     cmp.hnf();
 
-    assert!(TestLattice23::equal(&cmp, &prod));
+    assert_eq!(TestLattice23::equal(&cmp, &prod), u32::MAX);
 
     let prod2 = &lat * &elem;
-    assert!(TestLattice23::equal(&cmp, &prod2));
+    assert_eq!(TestLattice23::equal(&cmp, &prod2), u32::MAX);
 }
 
 #[test]
@@ -393,8 +388,7 @@ fn test_lattice_mul() {
     cmp.denom = b(24);
 
     let prod = &lat1 * &lat2;
-    assert_eq!(prod.generators, cmp.generators);
-    assert_eq!(prod.denom, cmp.denom);
+    assert_eq!(prod.ct_eq(&cmp), u32::MAX);
 
     lat1.generators = [
         TestQuat19::new_i32(4, 0, 0, 0),
@@ -412,8 +406,7 @@ fn test_lattice_mul() {
     lat2.denom = b(6);
 
     let prod2 = &lat1 * &lat2;
-    assert_eq!(prod2.generators, cmp.generators);
-    assert_eq!(prod2.denom, cmp.denom);
+    assert_eq!(prod2.ct_eq(&cmp), u32::MAX);
 
     cmp.generators = [
         TestQuat19::new_i32(1, 0, 0, 0),
@@ -424,8 +417,7 @@ fn test_lattice_mul() {
     cmp.denom = b(36);
 
     let prod_self = &lat2 * &lat2;
-    assert_eq!(prod_self.generators, cmp.generators);
-    assert_eq!(prod_self.denom, cmp.denom);
+    assert_eq!(prod_self.ct_eq(&cmp), u32::MAX);
 }
 
 #[test]
@@ -455,7 +447,7 @@ fn test_lattice_contains() {
     let coord_res = lat.contains(&x);
     assert!(coord_res.is_some());
     let coord = coord_res.unwrap();
-    
+
     assert_eq!(coord[0], b(2));
     assert_eq!(coord[1], b(-2));
     assert_eq!(coord[2], b(52));
@@ -505,8 +497,7 @@ fn test_lattice_hnf() {
 
     lat.hnf();
 
-    assert_eq!(lat.generators, cmp.generators);
-    assert_eq!(lat.denom, cmp.denom);
+    assert_eq!(lat.ct_eq(&cmp), u32::MAX);
 }
 
 #[test]

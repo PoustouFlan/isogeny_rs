@@ -18,14 +18,6 @@ impl<T: BigIntAlg, P: QuatConfig<T>> Clone for QuatLattice<T, P> {
     }
 }
 
-impl<T: BigIntAlg, P: QuatConfig<T>> PartialEq for QuatLattice<T, P> {
-    fn eq(&self, other: &Self) -> bool {
-        self.denom == other.denom && self.generators == other.generators
-    }
-}
-
-impl<T: BigIntAlg, P: QuatConfig<T>> Eq for QuatLattice<T, P> {}
-
 impl<T: BigIntAlg, P: QuatConfig<T>> QuatLattice<T, P> {
     pub fn zero() -> Self {
         Self {
@@ -58,7 +50,16 @@ impl<T: BigIntAlg, P: QuatConfig<T>> QuatLattice<T, P> {
         self.reduce_denom();
     }
 
-    pub fn equal(lat1: &Self, lat2: &Self) -> bool {
+    /// Careful, strict element-wise equality checking, not lattice equivalence!
+    pub fn ct_eq(&self, other: &Self) -> u32 {
+        self.denom.ct_eq(&other.denom)
+            & self.generators[0].ct_eq(&other.generators[0])
+            & self.generators[1].ct_eq(&other.generators[1])
+            & self.generators[2].ct_eq(&other.generators[2])
+            & self.generators[3].ct_eq(&other.generators[3])
+    }
+
+    pub fn equal(lat1: &Self, lat2: &Self) -> u32{
         let mut a = lat1.clone();
         let mut b = lat2.clone();
         a.reduce_denom();
@@ -68,10 +69,10 @@ impl<T: BigIntAlg, P: QuatConfig<T>> QuatLattice<T, P> {
         a.hnf();
         b.hnf();
 
-        a.denom == b.denom && a.generators == b.generators
+        a.ct_eq(&b)
     }
 
-    pub fn inclusion(sublat: &Self, overlat: &Self) -> bool {
+    pub fn inclusion(sublat: &Self, overlat: &Self) -> u32 {
         let sum = Self::add_lazy(overlat, sublat);
         Self::equal(&sum, overlat)
     }

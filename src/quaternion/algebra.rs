@@ -29,6 +29,9 @@ pub trait BigIntAlg:
     fn abs(&self) -> Self;
     fn is_zero(&self) -> bool;
 
+    /// Returns u32::MAX (0xFFFFFFFF) if equal, 0 otherwise
+    fn ct_eq(&self, other: &Self) -> u32;
+
     // Additions (mainly for HNF)
 
     /// Strictly positive modulo in [0, m)
@@ -80,14 +83,6 @@ impl<T: BigIntAlg, P: QuatConfig<T>> Clone for IntQuat<T, P> {
     }
 }
 
-impl<T: BigIntAlg, P: QuatConfig<T>> PartialEq for IntQuat<T, P> {
-    fn eq(&self, other: &Self) -> bool {
-        self.coords == other.coords
-    }
-}
-
-impl<T: BigIntAlg, P: QuatConfig<T>> Eq for IntQuat<T, P> {}
-
 impl<T: BigIntAlg, P: QuatConfig<T>> Debug for IntQuat<T, P> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("IntQuat").field("coords", &self.coords).finish()
@@ -108,6 +103,13 @@ impl<T: BigIntAlg, P: QuatConfig<T>> IntQuat<T, P> {
 
     pub fn zero() -> Self {
         Self::new_i32(0, 0, 0, 0)
+    }
+
+    pub fn ct_eq(&self, other: &Self) -> u32 {
+        self.coords[0].ct_eq(&other.coords[0])
+            & self.coords[1].ct_eq(&other.coords[1])
+            & self.coords[2].ct_eq(&other.coords[2])
+            & self.coords[3].ct_eq(&other.coords[3])
     }
 
     pub fn is_zero(&self) -> bool {
@@ -326,7 +328,7 @@ impl_scalar_mul!();
 // Rational Quaternions (Integer + Denominator)
 // ========================================================================
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct RatQuat<T: BigIntAlg, P: QuatConfig<T>> {
     pub num: IntQuat<T, P>,
     pub denom: T,
@@ -348,6 +350,10 @@ impl<T: BigIntAlg, P: QuatConfig<T>> RatQuat<T, P> {
 
     pub fn is_zero(&self) -> bool {
         self.num.is_zero()
+    }
+
+    pub fn ct_eq(&self, other: &Self) -> u32 {
+        self.num.ct_eq(&other.num) & self.denom.ct_eq(&other.denom)
     }
 
     pub fn conj(&self) -> Self {
@@ -482,6 +488,9 @@ pub mod backends {
         }
         fn abs(&self) -> Self { <BigInt as Signed>::abs(self) }
         fn is_zero(&self) -> bool { <BigInt as Zero>::is_zero(self) }
+        fn ct_eq(&self, other: &Self) -> u32 {
+            ((self == other) as u32).wrapping_neg()
+        }
     }
 
     // --- crypto_bigint Backend ---
@@ -543,5 +552,9 @@ pub mod backends {
         }
         fn abs(&self) -> Self { CryptoInt(Int::new(self.0.abs().into())) }
         fn is_zero(&self) -> bool { self.0.is_zero().into() }
+
+        fn ct_eq(&self, other: &Self) -> u32 {
+            ((self.0 == other.0) as u32).wrapping_neg()
+        }
     }
 }
